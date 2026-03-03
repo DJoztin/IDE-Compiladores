@@ -1,11 +1,37 @@
+# -*- coding: utf-8 -*-
+"""
+compilador.py  — Modulo compilador (independiente del IDE)
+Universidad Autonoma de Aguascalientes
+Dra. Blanca G. Estrada Renteria - Proyecto de Compiladores 1
+
+Uso desde linea de comandos:
+    python compilador.py --lexico     <archivo>
+    python compilador.py --sintactico <archivo>
+    python compilador.py --semantico  <archivo>
+    python compilador.py --intermedio <archivo>
+    python compilador.py --ejecutar   <archivo>
+
+NOTA: Este es un compilador STUB/DEMO.
+Reemplaza cada funcion con tu implementacion real.
+"""
 
 import sys
 import os
 import re
 
+# Forzar UTF-8 en Windows (evita errores con cp1252)
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+elif hasattr(sys.stdout, 'buffer'):
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 
 # ══════════════════════════════════════════════════════
-#  ANÁLISIS LÉXICO  (stub demo)
+#  ANALISIS LEXICO  (stub)
 # ══════════════════════════════════════════════════════
 PALABRAS_RESERVADAS = {
     "if", "else", "while", "for", "do", "return",
@@ -14,17 +40,17 @@ PALABRAS_RESERVADAS = {
 }
 
 TOKEN_PATTERNS = [
-    ("COMENTARIO",   r"//[^\n]*"),
-    ("REAL",         r"\d+\.\d+"),
-    ("ENTERO",       r"\d+"),
-    ("CADENA",       r'"[^"]*"'),
-    ("ID",           r"[a-zA-Z_]\w*"),
-    ("ASIGNACION",   r"==|!=|<=|>=|:=|="),
-    ("OP_ARIT",      r"[+\-*/]"),
-    ("OP_COMP",      r"[<>]"),
-    ("DELIMITADOR",  r"[(){};,\[\]]"),
-    ("ESPACIO",      r"[ \t\r\n]+"),
-    ("DESCONOCIDO",  r"."),
+    ("COMENTARIO",  r"//[^\n]*"),
+    ("REAL",        r"\d+\.\d+"),
+    ("ENTERO",      r"\d+"),
+    ("CADENA",      r'"[^"]*"'),
+    ("ID",          r"[a-zA-Z_]\w*"),
+    ("ASIGNACION",  r"==|!=|<=|>=|:=|="),
+    ("OP_ARIT",     r"[+\-*/]"),
+    ("OP_COMP",     r"[<>]"),
+    ("DELIMITADOR", r"[(){};,\[\]]"),
+    ("ESPACIO",     r"[ \t\r\n]+"),
+    ("DESCONOCIDO", r"."),
 ]
 
 MASTER = re.compile(
@@ -33,27 +59,35 @@ MASTER = re.compile(
 
 
 def analisis_lexico(codigo):
-    tokens = []
-    errores = []
-   
-    linea = 1
+    tokens       = []
+    errores      = []
+    linea        = 1
+    inicio_linea = 0   # offset del primer char de la linea actual
+
     for m in MASTER.finditer(codigo):
-        tipo = m.lastgroup
+        tipo  = m.lastgroup
         valor = m.group()
+
         if tipo == "ESPACIO":
-            linea += valor.count("\n")
+            nl = valor.count("\n")
+            if nl:
+                linea += nl
+                inicio_linea = m.end() - (len(valor) - valor.rfind("\n") - 1)
             continue
         if tipo == "COMENTARIO":
             continue
         if tipo == "DESCONOCIDO":
-            errores.append(f"[Léxico] Línea {linea}: carácter desconocido '{valor}'")
+            col = m.start() - inicio_linea + 1
+            errores.append(
+                f"[Lexico] Linea {linea}, Col {col}: caracter desconocido '{valor}'")
             continue
         if tipo == "ID" and valor in PALABRAS_RESERVADAS:
             tipo = "RESERVADA"
+
         tokens.append((tipo, valor, linea))
 
-    salida = f"{'TOKEN':<20} {'VALOR':<20} {'LÍNEA':>6}\n"
-    salida += "─" * 50 + "\n"
+    salida  = f"{'TOKEN':<20} {'VALOR':<20} {'LINEA':>6}\n"
+    salida += "-" * 50 + "\n"
     for t, v, l in tokens:
         salida += f"{t:<20} {v:<20} {l:>6}\n"
     salida += f"\nTotal tokens: {len(tokens)}\n"
@@ -62,172 +96,122 @@ def analisis_lexico(codigo):
 
 
 # ══════════════════════════════════════════════════════
-#  ANÁLISIS SINTÁCTICO  (stub demo)
+#  ANALISIS SINTACTICO  (stub)
 # ══════════════════════════════════════════════════════
 def analisis_sintactico(codigo):
-    """
-    Stub: verifica balanceo de {}, () y []
-    Reemplaza con tu parser real (LL1, LR, etc.)
-    """
-    pares = {')': '(', '}': '{', ']': '['}
-    pila = []
+    pares  = {')': '(', '}': '{', ']': '['}
+    pila   = []
     errores = []
-    linea = 1
-    arbol = "Programa\n"
-    indent = "  "
-    nivel = 0
+    linea  = 1
 
-    for i, c in enumerate(codigo):
+    for c in codigo:
         if c == '\n':
             linea += 1
         elif c in '({[':
             pila.append((c, linea))
-            nivel += 1
         elif c in ')}]':
             if not pila:
-                errores.append(f"[Sintáctico] Línea {linea}: '{c}' sin apertura correspondiente")
+                errores.append(f"[Sintactico] Linea {linea}: '{c}' sin apertura")
             elif pila[-1][0] != pares[c]:
-                errores.append(f"[Sintáctico] Línea {linea}: se esperaba cierre de '{pila[-1][0]}'")
+                errores.append(
+                    f"[Sintactico] Linea {linea}: se esperaba cierre de '{pila[-1][0]}'")
                 pila.pop()
             else:
                 pila.pop()
-                nivel -= 1
 
     for sym, ln in pila:
-        errores.append(f"[Sintáctico] Línea {ln}: '{sym}' sin cierre correspondiente")
+        errores.append(f"[Sintactico] Linea {ln}: '{sym}' sin cierre")
 
-    # Árbol simplificado por líneas de código
     lineas_codigo = [l.strip() for l in codigo.strip().split('\n') if l.strip()]
     arbol = "Programa\n"
     for l in lineas_codigo:
-        arbol += f"  └─ Sentencia: {l[:60]}\n"
-
+        arbol += f"  +-- Sentencia: {l[:60]}\n"
     if not errores:
-        arbol += "\n✔ Análisis sintáctico: sin errores\n"
+        arbol += "\n[OK] Sin errores sintacticos\n"
 
     return arbol, "\n".join(errores)
 
 
 # ══════════════════════════════════════════════════════
-#  ANÁLISIS SEMÁNTICO  (stub demo)
+#  ANALISIS SEMANTICO  (stub)
 # ══════════════════════════════════════════════════════
 def analisis_semantico(codigo):
-    """
-    Stub: verifica declaración de variables antes de uso.
-    Reemplaza con tu analizador semántico real.
-    """
+    tipo_re   = re.compile(r'\b(int|float|string|bool)\s+([a-zA-Z_]\w*)')
     declaradas = set()
-    errores = []
-    reporte = ""
-    tipo_re = re.compile(r'\b(int|float|string|bool)\s+([a-zA-Z_]\w*)')
-    uso_re  = re.compile(r'([a-zA-Z_]\w*)')
+    errores    = []
 
-    lineas = codigo.split('\n')
-    for i, linea in enumerate(lineas, 1):
+    for linea in codigo.split('\n'):
         for m in tipo_re.finditer(linea):
             declaradas.add(m.group(2))
 
-    reporte += f"Variables declaradas: {', '.join(sorted(declaradas)) or 'ninguna'}\n\n"
-
-    for i, linea in enumerate(lineas, 1):
-        # Saltar declaraciones y palabras reservadas
-        if tipo_re.search(linea):
-            continue
-        for m in uso_re.finditer(linea):
-            nombre = m.group(1)
-            if nombre in PALABRAS_RESERVADAS or nombre in {"true","false"}:
-                continue
-            # Heurística: solo marcar si aparece como operando (después de =, (, o al inicio)
-            # Stub muy simple — reemplazar con tabla de símbolos real
-
-    if not errores:
-        reporte += "✔ Análisis semántico: sin errores detectados en este stub.\n"
-        reporte += "(Implementa validación de tipos y tabla de símbolos real aquí)\n"
+    reporte  = f"Variables declaradas: {', '.join(sorted(declaradas)) or 'ninguna'}\n\n"
+    reporte += "[OK] Analisis semantico (stub): sin errores\n"
+    reporte += "(Reemplaza con tu implementacion real)\n"
 
     return reporte, "\n".join(errores)
 
 
 # ══════════════════════════════════════════════════════
-#  GENERACIÓN DE CÓDIGO INTERMEDIO  (stub demo)
+#  GENERACION DE CODIGO INTERMEDIO  (stub)
 # ══════════════════════════════════════════════════════
 def codigo_intermedio(codigo):
-    """
-    Stub: genera código de tres direcciones aproximado.
-    Reemplaza con tu generador real.
-    """
-    salida = "─── Código de Tres Direcciones (STUB) ───\n\n"
-    temp_count = 1
-    asig_re = re.compile(r'(\w+)\s*:?=\s*(.+)')
+    salida = "--- Codigo de Tres Direcciones (stub) ---\n\n"
+    temp   = 1
+    asig   = re.compile(r'(\w+)\s*:?=\s*(.+)')
 
     for linea in codigo.strip().split('\n'):
         linea = linea.strip()
         if not linea or linea.startswith("//"):
             continue
-        m = asig_re.match(linea)
+        m = asig.match(linea)
         if m:
-            var, expr = m.group(1), m.group(2)
-            # Separar expresión en partes
-            partes = re.split(r'([+\-*/])', expr.strip())
+            var, expr = m.group(1), m.group(2).strip().rstrip(';')
+            partes = re.split(r'([+\-*/])', expr)
             if len(partes) == 3:
-                salida += f"  t{temp_count} = {partes[0].strip()} {partes[1]} {partes[2].strip()}\n"
-                salida += f"  {var} = t{temp_count}\n"
-                temp_count += 1
+                salida += f"  t{temp} = {partes[0].strip()} {partes[1]} {partes[2].strip()}\n"
+                salida += f"  {var} = t{temp}\n"
+                temp += 1
             else:
-                salida += f"  {var} = {expr.strip()}\n"
-        elif linea.lower().startswith("print"):
-            salida += f"  PRINT {linea[5:].strip()}\n"
+                salida += f"  {var} = {expr}\n"
         elif linea.lower().startswith("if"):
-            salida += f"  IF_FALSE ({linea[2:].strip()}) GOTO L{temp_count}\n"
-            temp_count += 1
+            salida += f"  IF_FALSE ({linea[2:].strip()}) GOTO L{temp}\n"
+            temp += 1
         elif linea.lower().startswith("while"):
-            salida += f"  L{temp_count}: IF_FALSE ({linea[5:].strip()}) GOTO L{temp_count+1}\n"
-            temp_count += 2
+            salida += f"  L{temp}: IF_FALSE ({linea[5:].strip()}) GOTO L{temp+1}\n"
+            temp += 2
         else:
             salida += f"  ; {linea}\n"
 
-    salida += "\n(Reemplaza con tu generador de código intermedio real)\n"
+    salida += "\n(Reemplaza con tu generador real)\n"
     return salida, ""
 
 
 # ══════════════════════════════════════════════════════
-#  EJECUCIÓN  (stub demo)
+#  EJECUCION  (stub)
 # ══════════════════════════════════════════════════════
 def ejecutar(codigo):
-    """
-    Stub: interpreta print statements básicos.
-    Reemplaza con tu intérprete/generador de código real.
-    """
-    salida = "─── Resultado de Ejecución (STUB) ───\n\n"
+    salida    = "--- Resultado de Ejecucion (stub) ---\n\n"
     variables = {}
 
     for linea in codigo.strip().split('\n'):
         linea = linea.strip()
         if not linea or linea.startswith("//"):
             continue
-
-        # int x = valor
         m = re.match(r'(int|float|string)\s+(\w+)\s*:?=\s*(.+)', linea)
         if m:
             tipo, nombre, valor = m.group(1), m.group(2), m.group(3).strip().rstrip(';')
             try:
-                if tipo == "int":
-                    variables[nombre] = int(valor)
-                elif tipo == "float":
-                    variables[nombre] = float(valor)
-                else:
-                    variables[nombre] = valor.strip('"')
+                variables[nombre] = int(valor) if tipo == "int" else (
+                    float(valor) if tipo == "float" else valor.strip('"'))
             except Exception:
                 variables[nombre] = valor
             continue
-
-        # print(...)
         m = re.match(r'print\s*\((.+)\)', linea)
         if m:
-            expr = m.group(1).strip().rstrip(';').strip('"\'')
-            valor = variables.get(expr, expr)
-            salida += f"{valor}\n"
+            expr  = m.group(1).strip().rstrip(';').strip('"\'')
+            salida += f"{variables.get(expr, expr)}\n"
 
-    salida += "\n(Implementa tu intérprete o ejecutable real aquí)\n"
+    salida += "\n(Reemplaza con tu interprete real)\n"
     return salida, ""
 
 
@@ -237,14 +221,14 @@ def ejecutar(codigo):
 def main():
     if len(sys.argv) < 3:
         print("Uso: python compilador.py --<fase> <archivo>")
-        print("Fases disponibles: --lexico | --sintactico | --semantico | --intermedio | --ejecutar")
+        print("Fases: --lexico | --sintactico | --semantico | --intermedio | --ejecutar")
         sys.exit(1)
 
-    flag   = sys.argv[1]
+    flag    = sys.argv[1]
     archivo = sys.argv[2]
 
     if not os.path.isfile(archivo):
-        print(f"Error: no se encontró el archivo '{archivo}'", file=sys.stderr)
+        print(f"Error: archivo no encontrado '{archivo}'", file=sys.stderr)
         sys.exit(1)
 
     with open(archivo, "r", encoding="utf-8") as f:
@@ -263,7 +247,7 @@ def main():
         sys.exit(1)
 
     salida, errores = fases[flag](codigo)
-    print(salida, end="")
+    print(salida, end="", flush=True)
     if errores:
         print(errores, file=sys.stderr)
     sys.exit(1 if errores else 0)
