@@ -1,19 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-compilador.py  — Modulo compilador (independiente del IDE)
-Universidad Autonoma de Aguascalientes
-Dra. Blanca G. Estrada Renteria - Proyecto de Compiladores 1
-
-Uso desde linea de comandos:
-    python compilador.py --lexico     <archivo>
-    python compilador.py --sintactico <archivo>
-    python compilador.py --semantico  <archivo>
-    python compilador.py --intermedio <archivo>
-    python compilador.py --ejecutar   <archivo>
-
-NOTA: Este es un compilador STUB/DEMO.
-Reemplaza cada funcion con tu implementacion real.
-"""
 
 import sys
 import os
