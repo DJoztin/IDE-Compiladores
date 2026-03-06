@@ -990,12 +990,10 @@ class IDEMainWindow(QMainWindow):
         if not path:
             return "", "[Error] No hay archivo activo."
         compiler = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "compilador.py")
+            os.path.dirname(os.path.abspath(__file__)), "compilador")
         if not os.path.isfile(compiler):
             return "", (
-                "compilador.py no encontrado.\n"
-                "Debe estar en la misma carpeta que ide_compilador.py\n\n"
-                f"Uso desde consola:\n  python compilador.py --{flag} <archivo>")
+                )
         try:
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
