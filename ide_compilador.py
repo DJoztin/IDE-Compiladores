@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from highlighter import LexicoHighlighter
+from token_panel import TokenPanel
 
 import sys, os, subprocess, tempfile
 from PyQt6.QtWidgets import (
@@ -541,6 +543,9 @@ class IDEMainWindow(QMainWindow):
     def _new_tab(self, path=None, content=""):
         """Crea un nuevo tab con un CodeEditor."""
         editor = CodeEditor()
+        hl = LexicoHighlighter(editor.document())
+        editor._highlighter = hl 
+        editor = CodeEditor()
         editor.document().setPlainText(content)
         editor.document().setModified(False)
         editor.cursorPositionChanged.connect(self._update_cursor)
@@ -609,7 +614,7 @@ class IDEMainWindow(QMainWindow):
 
         # ── Resultados del compilador (derecha) ──
         self.nb_results = QTabWidget()
-        self.out_lexico = make_output("fg",  "bg")
+        self.out_lexico = TokenPanel()          # ← panel visual
         self.out_sint   = make_output("fg",  "bg")
         self.out_sem    = make_output("fg",  "bg")
         self.out_ci     = make_output("fg",  "bg")
@@ -617,6 +622,7 @@ class IDEMainWindow(QMainWindow):
         self.nb_results.addTab(self.out_sint,   "Sintactico")
         self.nb_results.addTab(self.out_sem,    "Semantico")
         self.nb_results.addTab(self.out_ci,     "Cod. Intermedio")
+ 
 
         self.symbol_table = QTableWidget(0, 5)
         self.symbol_table.setHorizontalHeaderLabels(
@@ -647,9 +653,16 @@ class IDEMainWindow(QMainWindow):
                                            self.nb_errors, BOTTOM)
 
         # Tamaños iniciales
-        self.resizeDocks([self.dock_explorer], [220], Qt.Orientation.Horizontal)
-        self.resizeDocks([self.dock_results],  [440], Qt.Orientation.Horizontal)
-        self.resizeDocks([self.dock_errors],   [200], Qt.Orientation.Vertical)
+        self.resizeDocks([self.dock_explorer], [200], Qt.Orientation.Horizontal)
+        self.resizeDocks([self.dock_results],  [380], Qt.Orientation.Horizontal)
+        self.resizeDocks([self.dock_errors],   [180], Qt.Orientation.Vertical)
+ 
+        
+        self.dock_results.setMinimumWidth(80)
+        self.dock_results.setMaximumWidth(16777215)
+        
+        self.dock_results.visibilityChanged.connect(
+            lambda v: self._btn_toggle_results.setChecked(v))
 
     # ══════════════════════════════════════════════════
     #  MENU
@@ -705,6 +718,19 @@ class IDEMainWindow(QMainWindow):
         self._tb.setObjectName("Acciones")
         self._tb.setMovable(False)
         self.addToolBar(self._tb)
+        
+        self._tb.addSeparator()
+        self._btn_toggle_results = QAction("▶  Resultados", self)
+        self._btn_toggle_results.setCheckable(True)
+        self._btn_toggle_results.setChecked(True)
+        self._btn_toggle_results.triggered.connect(self._toggle_results)
+        self._tb.addAction(self._btn_toggle_results)
+        w = self._tb.widgetForAction(self._btn_toggle_results)
+        if w:
+            w.setStyleSheet(
+                f"color:{C['fg_dim']}; border:1px solid {C['border']};"
+                f"border-radius:2px; padding:4px 10px;")
+        self._btn_toggle_results_widget = w
 
         def tbtn(lbl, cb, color=None):
             a = QAction(lbl, self)
@@ -771,8 +797,9 @@ class IDEMainWindow(QMainWindow):
         # Refrescar widgets con palette propia
         for e in self._all_editors():
             e.refresh_theme()
+            
         self.file_explorer.refresh_theme()
-
+        self.out_lexico.refresh_theme()
         # Refrescar todos los paneles de output
         for w in (self.out_lexico, self.out_sint, self.out_sem,
                   self.out_ci, self.out_exec,
@@ -989,35 +1016,44 @@ class IDEMainWindow(QMainWindow):
         path, is_tmp = self._get_source_path()
         if not path:
             return "", "[Error] No hay archivo activo."
-        compiler = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "compilador")
+
+        # Buscar compilador.py en la misma carpeta que ide.py
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        compiler = os.path.join(base_dir, "compilador.py")
+
         if not os.path.isfile(compiler):
             return "", (
-                )
+                f"[Error] No se encontró 'compilador.py' en:\n{base_dir}\n\n"
+                f"Asegúrate de que 'compilador.py' esté en la misma carpeta que 'ide.py'."
+            )
+
         try:
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
             r = subprocess.run(
                 [sys.executable, compiler, f"--{flag}", path],
-                capture_output=True, timeout=30,
-                encoding="utf-8", errors="replace", env=env)
+                capture_output=True,
+                timeout=30,
+                encoding="utf-8",
+                errors="replace",
+                env=env,
+            )
             return r.stdout, r.stderr
         except subprocess.TimeoutExpired:
-            return "", "[Error] Tiempo superado (30s)."
+            return "", "[Error] Tiempo de ejecución superado (30s)."
         except Exception as ex:
-            return "", f"[Error] {ex}"
+            return "", f"[Error al ejecutar compilador] {ex}"
         finally:
             if is_tmp:
                 try:
                     os.unlink(path)
                 except Exception:
                     pass
-
     def _lexico(self):
         self.lbl_status.setText("Ejecutando analisis lexico...")
         QApplication.processEvents()
         out, err = self._run_compiler("lexico")
-        self._set_output(self.out_lexico, out)
+        self.out_lexico.cargar_texto(out) 
         self._set_errors(self.err_lexico, err)
         self.nb_results.setCurrentWidget(self.out_lexico)
         self.dock_results.show(); self.dock_results.raise_()
@@ -1070,6 +1106,22 @@ class IDEMainWindow(QMainWindow):
         self.nb_errors.setCurrentWidget(self.out_exec)
         self.dock_errors.show(); self.dock_errors.raise_()
         self.lbl_status.setText("Ejecucion finalizada")
+    
+    def _toggle_results(self, checked):
+        """Muestra u oculta el panel de resultados del compilador."""
+        if checked:
+            self.dock_results.show()
+            self.dock_results.raise_()
+            if self._btn_toggle_results_widget:
+                self._btn_toggle_results_widget.setStyleSheet(
+                    f"color:white; background:{C['active']};"
+                    f"border-radius:2px; padding:4px 10px; font-weight:bold;")
+        else:
+            self.dock_results.hide()
+            if self._btn_toggle_results_widget:
+                self._btn_toggle_results_widget.setStyleSheet(
+                    f"color:{C['fg_dim']}; border:1px solid {C['border']};"
+                    f"border-radius:2px; padding:4px 10px;")        
 
 
 # ══════════════════════════════════════════════════════

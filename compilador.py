@@ -1,241 +1,346 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Analizador Léxico — CompiladorIDE UAA
+Autómata de estado finito determinista (DFA)
+
+Uso:  python compilador.py --lexico <archivo>
+"""
 
 import sys
 import os
-import re
 
-# Forzar UTF-8 en Windows (evita errores con cp1252)
-os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-elif hasattr(sys.stdout, 'buffer'):
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-
-
-# ══════════════════════════════════════════════════════
-#  ANALISIS LEXICO  (stub)
-# ══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
+#  TOKENS
+# ═══════════════════════════════════════════════════════════════
 PALABRAS_RESERVADAS = {
-    "if", "else", "while", "for", "do", "return",
-    "int", "float", "string", "bool", "void",
-    "true", "false", "and", "or", "not", "print"
+    "if", "else", "end", "do", "while",
+    "switch", "case", "int", "float",
+    "main", "cin", "cout"
 }
 
-TOKEN_PATTERNS = [
-    ("COMENTARIO",  r"//[^\n]*"),
-    ("REAL",        r"\d+\.\d+"),
-    ("ENTERO",      r"\d+"),
-    ("CADENA",      r'"[^"]*"'),
-    ("ID",          r"[a-zA-Z_]\w*"),
-    ("ASIGNACION",  r"==|!=|<=|>=|:=|="),
-    ("OP_ARIT",     r"[+\-*/]"),
-    ("OP_COMP",     r"[<>]"),
-    ("DELIMITADOR", r"[(){};,\[\]]"),
-    ("ESPACIO",     r"[ \t\r\n]+"),
-    ("DESCONOCIDO", r"."),
-]
-
-MASTER = re.compile(
-    "|".join(f"(?P<{name}>{pat})" for name, pat in TOKEN_PATTERNS)
-)
+TK_ENTERO        = "ENTERO"
+TK_REAL          = "REAL"
+TK_IDENTIFICADOR = "IDENTIFICADOR"
+TK_RESERVADA     = "RESERVADA"
+TK_COMENTARIO    = "COMENTARIO"
+TK_OP_ARIT       = "OP_ARITMETICO"
+TK_OP_REL        = "OP_RELACIONAL"
+TK_OP_LOG        = "OP_LOGICO"
+TK_ASIGNACION    = "ASIGNACION"
+TK_SIMBOLO       = "SIMBOLO"
+TK_CADENA        = "CADENA"
+TK_CARACTER      = "CARACTER"
+TK_ERROR         = "ERROR"
 
 
-def analisis_lexico(codigo):
-    tokens       = []
-    errores      = []
-    linea        = 1
-    inicio_linea = 0   # offset del primer char de la linea actual
+# ═══════════════════════════════════════════════════════════════
+#  CLASE TOKEN
+# ═══════════════════════════════════════════════════════════════
+class Token:
+    def __init__(self, tipo, valor, linea, columna):
+        self.tipo    = tipo
+        self.valor   = valor
+        self.linea   = linea
+        self.columna = columna
 
-    for m in MASTER.finditer(codigo):
-        tipo  = m.lastgroup
-        valor = m.group()
-
-        if tipo == "ESPACIO":
-            nl = valor.count("\n")
-            if nl:
-                linea += nl
-                inicio_linea = m.end() - (len(valor) - valor.rfind("\n") - 1)
-            continue
-        if tipo == "COMENTARIO":
-            continue
-        if tipo == "DESCONOCIDO":
-            col = m.start() - inicio_linea + 1
-            errores.append(
-                f"[Lexico] Linea {linea}, Col {col}: caracter desconocido '{valor}'")
-            continue
-        if tipo == "ID" and valor in PALABRAS_RESERVADAS:
-            tipo = "RESERVADA"
-
-        tokens.append((tipo, valor, linea))
-
-    salida  = f"{'TOKEN':<20} {'VALOR':<20} {'LINEA':>6}\n"
-    salida += "-" * 50 + "\n"
-    for t, v, l in tokens:
-        salida += f"{t:<20} {v:<20} {l:>6}\n"
-    salida += f"\nTotal tokens: {len(tokens)}\n"
-
-    return salida, "\n".join(errores)
+    def __str__(self):
+        return (f"{self.tipo:<22} "
+                f"{repr(self.valor):<30} "
+                f"Línea:{self.linea:<5} Col:{self.columna}")
 
 
-# ══════════════════════════════════════════════════════
-#  ANALISIS SINTACTICO  (stub)
-# ══════════════════════════════════════════════════════
-def analisis_sintactico(codigo):
-    pares  = {')': '(', '}': '{', ']': '['}
-    pila   = []
+class ErrorLexico:
+    def __init__(self, mensaje, linea, columna):
+        self.mensaje = mensaje
+        self.linea   = linea
+        self.columna = columna
+
+    def __str__(self):
+        return (f"[ERROR LÉXICO] Línea {self.linea}, "
+                f"Columna {self.columna}: {self.mensaje}")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ANALIZADOR (DFA)
+# ═══════════════════════════════════════════════════════════════
+def es_letra(c):
+    return c.isalpha() or c == '_'
+
+def es_digito(c):
+    return c.isdigit()
+
+
+def analizar(codigo: str):
+    tokens  = []
     errores = []
-    linea  = 1
 
-    for c in codigo:
+    texto = codigo
+    n     = len(texto)
+    i     = 0
+    linea = 1
+    col   = 1
+
+    def peek(offset=0):
+        pos = i + offset
+        return texto[pos] if pos < n else '\0'
+
+    def avanzar():
+        nonlocal i, linea, col
+        c = texto[i]
+        i += 1
         if c == '\n':
             linea += 1
-        elif c in '({[':
-            pila.append((c, linea))
-        elif c in ')}]':
-            if not pila:
-                errores.append(f"[Sintactico] Linea {linea}: '{c}' sin apertura")
-            elif pila[-1][0] != pares[c]:
-                errores.append(
-                    f"[Sintactico] Linea {linea}: se esperaba cierre de '{pila[-1][0]}'")
-                pila.pop()
-            else:
-                pila.pop()
-
-    for sym, ln in pila:
-        errores.append(f"[Sintactico] Linea {ln}: '{sym}' sin cierre")
-
-    lineas_codigo = [l.strip() for l in codigo.strip().split('\n') if l.strip()]
-    arbol = "Programa\n"
-    for l in lineas_codigo:
-        arbol += f"  +-- Sentencia: {l[:60]}\n"
-    if not errores:
-        arbol += "\n[OK] Sin errores sintacticos\n"
-
-    return arbol, "\n".join(errores)
-
-
-# ══════════════════════════════════════════════════════
-#  ANALISIS SEMANTICO  (stub)
-# ══════════════════════════════════════════════════════
-def analisis_semantico(codigo):
-    tipo_re   = re.compile(r'\b(int|float|string|bool)\s+([a-zA-Z_]\w*)')
-    declaradas = set()
-    errores    = []
-
-    for linea in codigo.split('\n'):
-        for m in tipo_re.finditer(linea):
-            declaradas.add(m.group(2))
-
-    reporte  = f"Variables declaradas: {', '.join(sorted(declaradas)) or 'ninguna'}\n\n"
-    reporte += "[OK] Analisis semantico (stub): sin errores\n"
-    reporte += "(Reemplaza con tu implementacion real)\n"
-
-    return reporte, "\n".join(errores)
-
-
-# ══════════════════════════════════════════════════════
-#  GENERACION DE CODIGO INTERMEDIO  (stub)
-# ══════════════════════════════════════════════════════
-def codigo_intermedio(codigo):
-    salida = "--- Codigo de Tres Direcciones (stub) ---\n\n"
-    temp   = 1
-    asig   = re.compile(r'(\w+)\s*:?=\s*(.+)')
-
-    for linea in codigo.strip().split('\n'):
-        linea = linea.strip()
-        if not linea or linea.startswith("//"):
-            continue
-        m = asig.match(linea)
-        if m:
-            var, expr = m.group(1), m.group(2).strip().rstrip(';')
-            partes = re.split(r'([+\-*/])', expr)
-            if len(partes) == 3:
-                salida += f"  t{temp} = {partes[0].strip()} {partes[1]} {partes[2].strip()}\n"
-                salida += f"  {var} = t{temp}\n"
-                temp += 1
-            else:
-                salida += f"  {var} = {expr}\n"
-        elif linea.lower().startswith("if"):
-            salida += f"  IF_FALSE ({linea[2:].strip()}) GOTO L{temp}\n"
-            temp += 1
-        elif linea.lower().startswith("while"):
-            salida += f"  L{temp}: IF_FALSE ({linea[5:].strip()}) GOTO L{temp+1}\n"
-            temp += 2
+            col = 1
         else:
-            salida += f"  ; {linea}\n"
+            col += 1
+        return c
 
-    salida += "\n(Reemplaza con tu generador real)\n"
-    return salida, ""
+    while i < n:
+        c = peek()
 
-
-# ══════════════════════════════════════════════════════
-#  EJECUCION  (stub)
-# ══════════════════════════════════════════════════════
-def ejecutar(codigo):
-    salida    = "--- Resultado de Ejecucion (stub) ---\n\n"
-    variables = {}
-
-    for linea in codigo.strip().split('\n'):
-        linea = linea.strip()
-        if not linea or linea.startswith("//"):
+        # ── blancos / saltos ──────────────────────────────
+        if c in (' ', '\t', '\r', '\n'):
+            avanzar()
             continue
-        m = re.match(r'(int|float|string)\s+(\w+)\s*:?=\s*(.+)', linea)
-        if m:
-            tipo, nombre, valor = m.group(1), m.group(2), m.group(3).strip().rstrip(';')
-            try:
-                variables[nombre] = int(valor) if tipo == "int" else (
-                    float(valor) if tipo == "float" else valor.strip('"'))
-            except Exception:
-                variables[nombre] = valor
+
+        tok_lin = linea
+        tok_col = col
+        lexema  = ""
+
+        # ── COMILLA SIMPLE → CARACTER ────────────────────
+        if c == "'":
+            lexema += avanzar()                    # consume '
+            while peek() not in ("'", '\0', '\n'):
+                lexema += avanzar()
+            if peek() == "'":
+                lexema += avanzar()                # consume ' cierre
+                tokens.append(Token(TK_CARACTER, lexema, tok_lin, tok_col))
+            else:
+                errores.append(ErrorLexico(
+                    f"Carácter no cerrado: {lexema!r}", tok_lin, tok_col))
             continue
-        m = re.match(r'print\s*\((.+)\)', linea)
-        if m:
-            expr  = m.group(1).strip().rstrip(';').strip('"\'')
-            salida += f"{variables.get(expr, expr)}\n"
 
-    salida += "\n(Reemplaza con tu interprete real)\n"
-    return salida, ""
+        # ── COMILLA DOBLE → CADENA ───────────────────────
+        if c == '"':
+            lexema += avanzar()                    # consume "
+            while peek() not in ('"', '\0', '\n'):
+                lexema += avanzar()
+            if peek() == '"':
+                lexema += avanzar()                # consume " cierre
+                tokens.append(Token(TK_CADENA, lexema, tok_lin, tok_col))
+            else:
+                errores.append(ErrorLexico(
+                    f"Cadena no cerrada: {lexema!r}", tok_lin, tok_col))
+            continue
+
+        # ── DÍGITO → ENTERO o REAL ───────────────────────
+        if es_digito(c):
+            while peek() and es_digito(peek()):
+                lexema += avanzar()
+            if peek() == '.' and es_digito(peek(1)):
+                lexema += avanzar()               # consume '.'
+                while peek() and es_digito(peek()):
+                    lexema += avanzar()
+                tokens.append(Token(TK_REAL, lexema, tok_lin, tok_col))
+            else:
+                tokens.append(Token(TK_ENTERO, lexema, tok_lin, tok_col))
+            continue
+
+        # ── LETRA → IDENTIFICADOR o RESERVADA ───────────
+        if es_letra(c):
+            while peek() and (es_letra(peek()) or es_digito(peek())):
+                lexema += avanzar()
+            if lexema in PALABRAS_RESERVADAS:
+                tokens.append(Token(TK_RESERVADA, lexema, tok_lin, tok_col))
+            else:
+                tokens.append(Token(TK_IDENTIFICADOR, lexema, tok_lin, tok_col))
+            continue
+
+        # ── / → DIVISION, COMENTARIO LINEA, COMENTARIO MULTI ──
+        if c == '/':
+            avanzar(); lexema = '/'
+            if peek() == '/':
+                # Comentario de una línea
+                lexema += avanzar()
+                while peek() not in ('\n', '\0'):
+                    lexema += avanzar()
+                tokens.append(Token(TK_COMENTARIO, lexema, tok_lin, tok_col))
+            elif peek() == '*':
+                # Comentario multilínea
+                lexema += avanzar()
+                cerrado = False
+                while peek() != '\0':
+                    ch = avanzar()
+                    lexema += ch
+                    if ch == '*' and peek() == '/':
+                        lexema += avanzar()
+                        cerrado = True
+                        break
+                if cerrado:
+                    tokens.append(Token(TK_COMENTARIO, lexema, tok_lin, tok_col))
+                else:
+                    errores.append(ErrorLexico(
+                        "Comentario multilínea sin cerrar", tok_lin, tok_col))
+            else:
+                tokens.append(Token(TK_OP_ARIT, '/', tok_lin, tok_col))
+            continue
+
+        # ── | → OR ──────────────────────────────────────
+        if c == '|':
+            avanzar()
+            if peek() == '|':
+                avanzar()
+                tokens.append(Token(TK_OP_LOG, '||', tok_lin, tok_col))
+            else:
+                errores.append(ErrorLexico(
+                    "'|' solitario no reconocido", tok_lin, tok_col))
+            continue
+
+        # ── & → AND ─────────────────────────────────────
+        if c == '&':
+            avanzar()
+            if peek() == '&':
+                avanzar()
+                tokens.append(Token(TK_OP_LOG, '&&', tok_lin, tok_col))
+            else:
+                errores.append(ErrorLexico(
+                    "'&' solitario no reconocido", tok_lin, tok_col))
+            continue
+
+        # ── Relacionales / Asignación / Not ─────────────
+        if c in ('<', '>', '!', '='):
+            avanzar(); lexema = c
+            if peek() == '=':
+                lexema += avanzar()
+                tokens.append(Token(TK_OP_REL, lexema, tok_lin, tok_col))
+            elif c == '=':
+                tokens.append(Token(TK_ASIGNACION, '=', tok_lin, tok_col))
+            elif c == '!':
+                tokens.append(Token(TK_OP_LOG, '!', tok_lin, tok_col))
+            else:
+                tokens.append(Token(TK_OP_REL, c, tok_lin, tok_col))
+            continue
+
+        # ── - o -- ──────────────────────────────────────
+        if c == '-':
+            avanzar()
+            if peek() == '-':
+                avanzar()
+                tokens.append(Token(TK_OP_ARIT, '--', tok_lin, tok_col))
+            else:
+                tokens.append(Token(TK_OP_ARIT, '-', tok_lin, tok_col))
+            continue
+
+        # ── + o ++ ──────────────────────────────────────
+        if c == '+':
+            avanzar()
+            if peek() == '+':
+                avanzar()
+                tokens.append(Token(TK_OP_ARIT, '++', tok_lin, tok_col))
+            else:
+                tokens.append(Token(TK_OP_ARIT, '+', tok_lin, tok_col))
+            continue
+
+        # ── Operadores aritméticos simples ───────────────
+        if c in ('*', '%', '^'):
+            avanzar()
+            tokens.append(Token(TK_OP_ARIT, c, tok_lin, tok_col))
+            continue
+
+        # ── Símbolos ─────────────────────────────────────
+        if c in ('(', ')', '{', '}', '[', ']', ',', ';', '.', ':'):
+            avanzar()
+            tokens.append(Token(TK_SIMBOLO, c, tok_lin, tok_col))
+            continue
+
+        # ── ERROR: carácter no reconocido ────────────────
+        avanzar()
+        errores.append(ErrorLexico(
+            f"Carácter no reconocido: '{c}' (ASCII {ord(c)})",
+            tok_lin, tok_col))
+
+    return tokens, errores
 
 
-# ══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
+#  SALIDA FORMATEADA
+# ═══════════════════════════════════════════════════════════════
+def formatear_tokens(tokens):
+    if not tokens:
+        return "(sin tokens reconocidos)"
+
+    sep  = "─" * 68
+    sep2 = "═" * 68
+    lineas = [
+        sep2,
+        f"  {'TIPO':<22} {'VALOR':<30} {'LÍN':>4}  {'COL':>4}",
+        sep2,
+    ]
+
+    grupo_anterior = None
+    for tk in tokens:
+        if grupo_anterior is not None and grupo_anterior != tk.tipo:
+            lineas.append(sep)
+        lineas.append(
+            f"  {tk.tipo:<22} {repr(tk.valor):<30} {tk.linea:>4}  {tk.columna:>4}")
+        grupo_anterior = tk.tipo
+
+    lineas.append(sep2)
+    lineas.append(f"  Total de tokens: {len(tokens)}")
+    return "\n".join(lineas)
+
+
+def formatear_errores(errores):
+    if not errores:
+        return ""
+    lineas = [
+        f"{'─'*50}",
+        f"  Total de errores léxicos: {len(errores)}",
+        f"{'─'*50}",
+    ]
+    for e in errores:
+        lineas.append(str(e))
+    return "\n".join(lineas)
+
+
+# ═══════════════════════════════════════════════════════════════
 #  PUNTO DE ENTRADA
-# ══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 def main():
-    if len(sys.argv) < 3:
-        print("Uso: python compilador.py --<fase> <archivo>")
-        print("Fases: --lexico | --sintactico | --semantico | --intermedio | --ejecutar")
+    args = sys.argv[1:]
+
+    if "--lexico" not in args:
+        print("Uso: python compilador.py --lexico <archivo>", file=sys.stderr)
         sys.exit(1)
 
-    flag    = sys.argv[1]
-    archivo = sys.argv[2]
-
-    if not os.path.isfile(archivo):
-        print(f"Error: archivo no encontrado '{archivo}'", file=sys.stderr)
+    idx = args.index("--lexico")
+    if idx + 1 >= len(args):
+        print("[compilador.py] Error: falta ruta del archivo.", file=sys.stderr)
         sys.exit(1)
 
-    with open(archivo, "r", encoding="utf-8") as f:
-        codigo = f.read()
+    ruta = args[idx + 1]
 
-    fases = {
-        "--lexico":      analisis_lexico,
-        "--sintactico":  analisis_sintactico,
-        "--semantico":   analisis_semantico,
-        "--intermedio":  codigo_intermedio,
-        "--ejecutar":    ejecutar,
-    }
-
-    if flag not in fases:
-        print(f"Fase desconocida: {flag}", file=sys.stderr)
+    if not os.path.isfile(ruta):
+        print(f"[compilador.py] Error: no existe el archivo: {ruta}",
+              file=sys.stderr)
         sys.exit(1)
 
-    salida, errores = fases[flag](codigo)
-    print(salida, end="", flush=True)
+    try:
+        with open(ruta, "r", encoding="utf-8") as f:
+            codigo = f.read()
+    except Exception as ex:
+        print(f"[compilador.py] Error al leer: {ex}", file=sys.stderr)
+        sys.exit(1)
+
+    tokens, errores = analizar(codigo)
+
+    # stdout → panel "Lexico" del IDE
+    print(formatear_tokens(tokens))
+
+    # stderr → panel "Errores Lexicos" del IDE
     if errores:
-        print(errores, file=sys.stderr)
-    sys.exit(1 if errores else 0)
+        print(formatear_errores(errores), file=sys.stderr)
 
 
 if __name__ == "__main__":
