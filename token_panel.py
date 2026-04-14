@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
+
 """
-token_panel.py — Panel visual de tokens para CompiladorIDE UAA
-Con filtros clickeables por tipo de token.
+token_panel.py — Panel visual de tokens
 """
 
 import re
@@ -14,6 +13,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QColor, QFont, QBrush, QPalette
 from PyQt6.QtCore import Qt
 
+
 # ── Colores de badge por tipo de token ─────────────────────────
 TOKEN_BADGE = {
     "RESERVADA":       ("#569cd6", "#0d2a42"),
@@ -22,7 +22,6 @@ TOKEN_BADGE = {
     "REAL":            ("#4ec9b0", "#0d2622"),
     "CADENA":          ("#ce9178", "#2e1a12"),
     "CARACTER":        ("#d7a06a", "#2a1a0d"),
-    "COMENTARIO":      ("#6a9955", "#111e0e"),
     "OP_ARITMETICO":   ("#dcdcaa", "#2a2a10"),
     "OP_RELACIONAL":   ("#d7ba7d", "#2a2310"),
     "OP_LOGICO":       ("#c586c0", "#261326"),
@@ -38,7 +37,6 @@ TOKEN_LABEL = {
     "REAL":          "real",
     "CADENA":        "cadena",
     "CARACTER":      "carácter",
-    "COMENTARIO":    "comentario",
     "OP_ARITMETICO": "aritmético",
     "OP_RELACIONAL": "relacional",
     "OP_LOGICO":     "lógico",
@@ -342,11 +340,16 @@ class TokenPanel(QWidget):
             f"color:{fg2}; background:{bg2};")
         self._btn_limpiar.setStyleSheet(
             f"QPushButton {{ color:{fg2}; background:{bg2};"
-            f"border:1px solid {sep}; border-radius:3px; }}"            f"QPushButton:hover {{ color:{fg}; border-color:{fg2}; }}")
+            f"border:1px solid {sep}; border-radius:3px; }}"
+            f"QPushButton:hover {{ color:{fg}; border-color:{fg2}; }}")
         # Scroll area y widget interno — mismo color de fondo
         if hasattr(self, "_scroll_chips"):
-            self._scroll_chips.setStyleSheet(
-                f"background:{bg2}; border:none;"                f"QScrollBar:horizontal {{ background:{bg2}; height:6px; border:none; }}"                f"QScrollBar::handle:horizontal {{ background:{sep}; border-radius:3px; min-width:20px; }}"                f"QScrollBar::handle:horizontal:hover {{ background:{fg2}; }}"                f"QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width:0; }}")
+            self._scroll_chips.setStyleSheet(f"background:{bg2}; border:none;")
+            self._scroll_chips.horizontalScrollBar().setStyleSheet(
+                f"QScrollBar:horizontal {{ background:{bg2}; height:6px; border:none; }}"
+                f"QScrollBar::handle:horizontal {{ background:{sep}; border-radius:3px; min-width:20px; }}"
+                f"QScrollBar::handle:horizontal:hover {{ background:{fg2}; }}"
+                f"QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width:0; }}")
             self._chips_widget.setStyleSheet(f"background:{bg2};")
 
         self.table.setStyleSheet(f"""

@@ -23,7 +23,6 @@ TK_ENTERO        = "ENTERO"
 TK_REAL          = "REAL"
 TK_IDENTIFICADOR = "IDENTIFICADOR"
 TK_RESERVADA     = "RESERVADA"
-TK_COMENTARIO    = "COMENTARIO"
 TK_OP_ARIT       = "OP_ARITMETICO"
 TK_OP_REL        = "OP_RELACIONAL"
 TK_OP_LOG        = "OP_LOGICO"
@@ -32,10 +31,11 @@ TK_SIMBOLO       = "SIMBOLO"
 TK_CADENA        = "CADENA"
 TK_CARACTER      = "CARACTER"
 TK_ERROR         = "ERROR"
+# Nota: TK_COMENTARIO eliminado — los comentarios se ignoran en tokens
 
 
 # ═══════════════════════════════════════════════════════════════
-#  CLASE TOKEN
+#  CLASES
 # ═══════════════════════════════════════════════════════════════
 class Token:
     def __init__(self, tipo, valor, linea, columna):
@@ -43,11 +43,6 @@ class Token:
         self.valor   = valor
         self.linea   = linea
         self.columna = columna
-
-    def __str__(self):
-        return (f"{self.tipo:<22} "
-                f"{repr(self.valor):<30} "
-                f"Línea:{self.linea:<5} Col:{self.columna}")
 
 
 class ErrorLexico:
@@ -62,7 +57,7 @@ class ErrorLexico:
 
 
 # ═══════════════════════════════════════════════════════════════
-#  ANALIZADOR (DFA)
+#  HELPERS
 # ═══════════════════════════════════════════════════════════════
 def es_letra(c):
     return c.isalpha() or c == '_'
@@ -70,7 +65,13 @@ def es_letra(c):
 def es_digito(c):
     return c.isdigit()
 
+def es_blanco(c):
+    return c in (' ', '\t', '\r', '\n')
 
+
+# ═══════════════════════════════════════════════════════════════
+#  ANALIZADOR (DFA)
+# ═══════════════════════════════════════════════════════════════
 def analizar(codigo: str):
     tokens  = []
     errores = []
@@ -96,11 +97,16 @@ def analizar(codigo: str):
             col += 1
         return c
 
+    def saltar_blancos():
+        """Avanza mientras haya espacios/tabs/saltos. Devuelve el siguiente char."""
+        while i < n and es_blanco(peek()):
+            avanzar()
+
     while i < n:
         c = peek()
 
-        # ── blancos / saltos ──────────────────────────────
-        if c in (' ', '\t', '\r', '\n'):
+        # ── blancos / saltos — siempre ignorados ─────────
+        if es_blanco(c):
             avanzar()
             continue
 
@@ -110,11 +116,11 @@ def analizar(codigo: str):
 
         # ── COMILLA SIMPLE → CARACTER ────────────────────
         if c == "'":
-            lexema += avanzar()                    # consume '
+            lexema += avanzar()
             while peek() not in ("'", '\0', '\n'):
                 lexema += avanzar()
             if peek() == "'":
-                lexema += avanzar()                # consume ' cierre
+                lexema += avanzar()
                 tokens.append(Token(TK_CARACTER, lexema, tok_lin, tok_col))
             else:
                 errores.append(ErrorLexico(
@@ -123,11 +129,11 @@ def analizar(codigo: str):
 
         # ── COMILLA DOBLE → CADENA ───────────────────────
         if c == '"':
-            lexema += avanzar()                    # consume "
+            lexema += avanzar()
             while peek() not in ('"', '\0', '\n'):
                 lexema += avanzar()
             if peek() == '"':
-                lexema += avanzar()                # consume " cierre
+                lexema += avanzar()
                 tokens.append(Token(TK_CADENA, lexema, tok_lin, tok_col))
             else:
                 errores.append(ErrorLexico(
@@ -135,21 +141,46 @@ def analizar(codigo: str):
             continue
 
         # ── DÍGITO → ENTERO o REAL ───────────────────────
+        # Reglas:
+        #   123       → ENTERO
+        #   123.456   → REAL
+        #   123.      → ERROR (punto sin dígitos)
+        #   123.4.5   → ERROR (más de un punto)
         if es_digito(c):
-            while peek() and es_digito(peek()):
+            while es_digito(peek()):
                 lexema += avanzar()
-            if peek() == '.' and es_digito(peek(1)):
-                lexema += avanzar()               # consume '.'
-                while peek() and es_digito(peek()):
-                    lexema += avanzar()
-                tokens.append(Token(TK_REAL, lexema, tok_lin, tok_col))
+
+            if peek() == '.':
+                # Hay un punto — ¿le sigue un dígito?
+                if es_digito(peek(1)):
+                    lexema += avanzar()          # consume '.'
+                    while es_digito(peek()):
+                        lexema += avanzar()
+                    # El REAL termina aquí aunque siga otro '.'
+                    # El punto sobrante lo manejará el loop principal como error
+                    tokens.append(Token(TK_REAL, lexema, tok_lin, tok_col))
+                else:
+                    # Punto sin dígitos después → error, NO se emite token
+                    punto = avanzar()            # consume '.'
+                    errores.append(ErrorLexico(
+                        f"Número mal formado: '{lexema}{punto}' "
+                        f"(punto sin dígitos después)",
+                        tok_lin, tok_col))
             else:
                 tokens.append(Token(TK_ENTERO, lexema, tok_lin, tok_col))
             continue
 
+        # ── PUNTO SOLO → ERROR (no es símbolo válido) ────
+        if c == '.':
+            avanzar()
+            errores.append(ErrorLexico(
+                f"Carácter no reconocido: '.' (el punto solo no es válido)",
+                tok_lin, tok_col))
+            continue
+
         # ── LETRA → IDENTIFICADOR o RESERVADA ───────────
         if es_letra(c):
-            while peek() and (es_letra(peek()) or es_digito(peek())):
+            while es_letra(peek()) or es_digito(peek()):
                 lexema += avanzar()
             if lexema in PALABRAS_RESERVADAS:
                 tokens.append(Token(TK_RESERVADA, lexema, tok_lin, tok_col))
@@ -158,37 +189,37 @@ def analizar(codigo: str):
             continue
 
         # ── / → DIVISION, COMENTARIO LINEA, COMENTARIO MULTI ──
+        # Los comentarios se consumen y DESCARTAN (no generan token)
         if c == '/':
-            avanzar(); lexema = '/'
+            avanzar()
             if peek() == '/':
-                # Comentario de una línea
-                lexema += avanzar()
+                # Comentario de una línea — ignorar hasta fin de línea
+                avanzar()
                 while peek() not in ('\n', '\0'):
-                    lexema += avanzar()
-                tokens.append(Token(TK_COMENTARIO, lexema, tok_lin, tok_col))
+                    avanzar()
+                # No se agrega token
             elif peek() == '*':
-                # Comentario multilínea
-                lexema += avanzar()
+                # Comentario multilínea — ignorar hasta */
+                avanzar()
                 cerrado = False
                 while peek() != '\0':
                     ch = avanzar()
-                    lexema += ch
                     if ch == '*' and peek() == '/':
-                        lexema += avanzar()
+                        avanzar()
                         cerrado = True
                         break
-                if cerrado:
-                    tokens.append(Token(TK_COMENTARIO, lexema, tok_lin, tok_col))
-                else:
+                if not cerrado:
                     errores.append(ErrorLexico(
-                        "Comentario multilínea sin cerrar", tok_lin, tok_col))
+                        "Comentario multilínea sin cerrar '/*'",
+                        tok_lin, tok_col))
             else:
                 tokens.append(Token(TK_OP_ARIT, '/', tok_lin, tok_col))
             continue
 
-        # ── | → OR ──────────────────────────────────────
+        # ── | → OR (ignora blancos/saltos entre || ) ─────
         if c == '|':
             avanzar()
+            saltar_blancos()
             if peek() == '|':
                 avanzar()
                 tokens.append(Token(TK_OP_LOG, '||', tok_lin, tok_col))
@@ -197,9 +228,10 @@ def analizar(codigo: str):
                     "'|' solitario no reconocido", tok_lin, tok_col))
             continue
 
-        # ── & → AND ─────────────────────────────────────
+        # ── & → AND (ignora blancos/saltos entre &&) ─────
         if c == '&':
             avanzar()
+            saltar_blancos()
             if peek() == '&':
                 avanzar()
                 tokens.append(Token(TK_OP_LOG, '&&', tok_lin, tok_col))
@@ -211,6 +243,8 @@ def analizar(codigo: str):
         # ── Relacionales / Asignación / Not ─────────────
         if c in ('<', '>', '!', '='):
             avanzar(); lexema = c
+            # Ignorar blancos entre los caracteres del operador (ej: = \n =)
+            saltar_blancos()
             if peek() == '=':
                 lexema += avanzar()
                 tokens.append(Token(TK_OP_REL, lexema, tok_lin, tok_col))
@@ -222,9 +256,10 @@ def analizar(codigo: str):
                 tokens.append(Token(TK_OP_REL, c, tok_lin, tok_col))
             continue
 
-        # ── - o -- ──────────────────────────────────────
+        # ── - o -- (ignora blancos entre -- ) ────────────
         if c == '-':
             avanzar()
+            saltar_blancos()
             if peek() == '-':
                 avanzar()
                 tokens.append(Token(TK_OP_ARIT, '--', tok_lin, tok_col))
@@ -232,9 +267,10 @@ def analizar(codigo: str):
                 tokens.append(Token(TK_OP_ARIT, '-', tok_lin, tok_col))
             continue
 
-        # ── + o ++ ──────────────────────────────────────
+        # ── + o ++ (ignora blancos entre ++) ─────────────
         if c == '+':
             avanzar()
+            saltar_blancos()
             if peek() == '+':
                 avanzar()
                 tokens.append(Token(TK_OP_ARIT, '++', tok_lin, tok_col))
@@ -248,8 +284,8 @@ def analizar(codigo: str):
             tokens.append(Token(TK_OP_ARIT, c, tok_lin, tok_col))
             continue
 
-        # ── Símbolos ─────────────────────────────────────
-        if c in ('(', ')', '{', '}', '[', ']', ',', ';', '.', ':'):
+        # ── Símbolos válidos (punto eliminado de aquí) ───
+        if c in ('(', ')', '{', '}', '[', ']', ',', ';', ':'):
             avanzar()
             tokens.append(Token(TK_SIMBOLO, c, tok_lin, tok_col))
             continue
@@ -295,9 +331,9 @@ def formatear_errores(errores):
     if not errores:
         return ""
     lineas = [
-        f"{'─'*50}",
+        f"{'─'*60}",
         f"  Total de errores léxicos: {len(errores)}",
-        f"{'─'*50}",
+        f"{'─'*60}",
     ]
     for e in errores:
         lineas.append(str(e))
@@ -320,7 +356,6 @@ def main():
         sys.exit(1)
 
     ruta = args[idx + 1]
-
     if not os.path.isfile(ruta):
         print(f"[compilador.py] Error: no existe el archivo: {ruta}",
               file=sys.stderr)
@@ -335,10 +370,8 @@ def main():
 
     tokens, errores = analizar(codigo)
 
-    # stdout → panel "Lexico" del IDE
     print(formatear_tokens(tokens))
 
-    # stderr → panel "Errores Lexicos" del IDE
     if errores:
         print(formatear_errores(errores), file=sys.stderr)
 

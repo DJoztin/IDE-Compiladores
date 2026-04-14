@@ -1,14 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-highlighter.py — Resaltado de sintaxis en tiempo real
-Integrar en el IDE importándolo y aplicándolo al CodeEditor.
-
-Uso en ide.py:
-    from highlighter import LexicoHighlighter
-    ...
-    editor = CodeEditor()
-    hl = LexicoHighlighter(editor.document())
-"""
 
 from PyQt6.QtGui import (
     QSyntaxHighlighter, QTextCharFormat, QColor, QFont

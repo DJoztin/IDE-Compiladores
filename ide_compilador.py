@@ -256,7 +256,10 @@ class LineNumberArea(QWidget):
     def paintEvent(self, event):
         self.editor._paint_gutter(event)
 
-
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
 class CodeEditor(QPlainTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -546,6 +549,7 @@ class IDEMainWindow(QMainWindow):
         hl = LexicoHighlighter(editor.document())
         editor._highlighter = hl 
         editor = CodeEditor()
+        editor._highlighter = LexicoHighlighter(editor.document())  # ← agregar
         editor.document().setPlainText(content)
         editor.document().setModified(False)
         editor.cursorPositionChanged.connect(self._update_cursor)
@@ -801,14 +805,20 @@ class IDEMainWindow(QMainWindow):
         self.file_explorer.refresh_theme()
         self.out_lexico.refresh_theme()
         # Refrescar todos los paneles de output
-        for w in (self.out_lexico, self.out_sint, self.out_sem,
+        self.out_lexico.refresh_theme()
+ 
+        for w in (self.out_sint, self.out_sem,
                   self.out_ci, self.out_exec,
                   self.err_lexico, self.err_sint, self.err_sem):
             _apply_output_style(w)
+ 
 
         self._lbl_tema.setStyleSheet(
             f"color:{C['fg_dim']}; background:transparent;")
         self._update_ejecutar_btn()
+        for e in self._all_editors():
+            if hasattr(e, '_highlighter'):
+                e._highlighter.rehighlight()
 
     # ══════════════════════════════════════════════════
     #  HELPERS
@@ -1012,35 +1022,40 @@ class IDEMainWindow(QMainWindow):
         tmp.close()
         return tmp.name, True
 
+    def _load_compilador(self):
+        """Importa compilador.py como módulo desde su ruta real."""
+        import importlib.util, sys
+        compiler_path = resource_path("compilador.py")
+        if not os.path.isfile(compiler_path):
+            return None, f"[Error] No se encontró 'compilador.py' en:\n{os.path.dirname(compiler_path)}"
+        sys.modules.pop("compilador", None)
+        spec = importlib.util.spec_from_file_location("compilador", compiler_path)
+        mod  = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod, None
+
     def _run_compiler(self, flag):
         path, is_tmp = self._get_source_path()
         if not path:
             return "", "[Error] No hay archivo activo."
 
-        # Buscar compilador.py en la misma carpeta que ide.py
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        compiler = os.path.join(base_dir, "compilador.py")
-
-        if not os.path.isfile(compiler):
-            return "", (
-                f"[Error] No se encontró 'compilador.py' en:\n{base_dir}\n\n"
-                f"Asegúrate de que 'compilador.py' esté en la misma carpeta que 'ide.py'."
-            )
+        mod, err = self._load_compilador()
+        if err:
+            return "", err
 
         try:
-            env = os.environ.copy()
-            env["PYTHONIOENCODING"] = "utf-8"
-            r = subprocess.run(
-                [sys.executable, compiler, f"--{flag}", path],
-                capture_output=True,
-                timeout=30,
-                encoding="utf-8",
-                errors="replace",
-                env=env,
-            )
-            return r.stdout, r.stderr
-        except subprocess.TimeoutExpired:
-            return "", "[Error] Tiempo de ejecución superado (30s)."
+            with open(path, "r", encoding="utf-8") as f:
+                codigo = f.read()
+
+            if flag == "lexico":
+                tokens, errores = mod.analizar(codigo)
+                out = mod.formatear_tokens(tokens)
+                err = mod.formatear_errores(errores)
+                return out, err
+
+            # Para los demás flags aún no implementados:
+            return "", f"[Error] Flag '--{flag}' no implementado aún."
+
         except Exception as ex:
             return "", f"[Error al ejecutar compilador] {ex}"
         finally:
