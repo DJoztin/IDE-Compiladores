@@ -375,6 +375,159 @@ def main():
     if errores:
         print(formatear_errores(errores), file=sys.stderr)
 
+# =====================================================================
+# ADAPTADOR PARA CONECTAR TU LEXER MANUAL CON EL PARSER DE PLY
+# =====================================================================
+
+class LexerBridge:
+    """Clase puente que convierte tus tokens manuales al formato que PLY entiende."""
+    def __init__(self, tokens_manuales):
+        self.tokens = tokens_manuales
+        self.pos = 0
+
+    def token(self):
+        if self.pos >= len(self.tokens):
+            return None
+        tk_manual = self.tokens[self.pos]
+        self.pos += 1
+
+        # Diccionario de traducción de tus tokens a los de PLY
+        mapa_tipos = {
+            "ENTERO": "INT",
+            "REAL": "FLOAT",
+            "IDENTIFICADOR": "ID",
+            "RESERVADA": tk_manual.valor.upper(), # 'if' -> 'IF', 'while' -> 'WHILE'
+            "OP_ARITMETICO": {
+                "+": "PLUS", "-": "MINUS", "*": "TIMES", "/": "DIVIDE", "%": "MODULO",
+                "++": "INCREMENT", "--": "DECREMENT"
+            }.get(tk_manual.valor),
+            "OP_RELACIONAL": {
+                "<": "LESS", ">": "GREATER", "<=": "LESS_EQUAL", ">=": "GREATER_EQUAL",
+                "==": "EQUAL", "!=": "NOT_EQUAL"
+            }.get(tk_manual.valor),
+            "OP_LOGICO": {
+                "&&": "AND", "||": "OR", "!": "NOT"
+            }.get(tk_manual.valor),
+            "ASIGNACION": "ASSIGN",
+            "CADENA": "STRING",
+            "CARACTER": "CHAR",
+            "SIMBOLO": {
+                "(": "LPAREN", ")": "RPAREN",
+                "{": "LBRACE", "}": "RBRACE",
+                "[": "LBRACKET", "]": "RBRACKET",
+                ";": "SEMI", ",": "COMMA", ".": "DOT", ":": "COLON"
+            }.get(tk_manual.valor)
+        }
+
+        tipo_ply = mapa_tipos.get(tk_manual.tipo)
+        if isinstance(tipo_ply, dict):
+            tipo_ply = mapa_tipos.get(tk_manual.tipo) # Salvaguarda por si acaso
+
+        # Si es una palabra reservada o símbolo especial mapeado internamente
+        if tk_manual.tipo == "RESERVADA":
+            # Caso especial para tipos de datos
+            if tk_manual.valor in ["int", "float", "char", "void"]:
+                tipo_ply = f"{tk_manual.valor.upper()}_TYPE"
+            else:
+                tipo_ply = tk_manual.valor.upper()
+
+        if not tipo_ply:
+            # Si no se encuentra un mapeo directo, ignoramos o tratamos como ID temporal
+            return self.token()
+
+        # Crear un token compatible con PLY
+        class PLYToken:
+            def __init__(self, type_, value, lineno, lexpos):
+                self.type = type_
+                self.value = value
+                self.lineno = lineno
+                self.lexpos = lexpos
+            def __str__(self):
+                return f"LexToken({self.type},{self.value},{self.lineno},{self.lexpos})"
+
+        return PLYToken(tipo_ply, tk_manual.valor, tk_manual.linea, tk_manual.columna)
+
+
+def ejecutar_sintactico_consola(codigo):
+    # 1. Tu analizador léxico manual DFA
+    mis_tokens, mis_errores = analizar(codigo)
+    
+    # RÚBRICA: Indispensable eliminar errores léxicos previos
+    if mis_errores:
+        for err in mis_errores:
+            print(f"[Error Lexico] Linea {err.linea}, Col {err.columna}: {err.mensaje}", file=sys.stderr)
+        return
+
+    # 2. Importar el parser de PLY de forma segura
+    try:
+        from analizador_sintactico import _parser, _errores_sint
+    except ImportError:
+        print("[Error] No se encontró el archivo 'analizador_sintactico.py'.", file=sys.stderr)
+        return
+
+    # 3. Inicializar el puente de tokens y limpiar cola de errores
+    bridge = LexerBridge(mis_tokens)
+    _errores_sint.clear()
+
+    # 4. Parsear el código de prueba
+    ast = _parser.parse(lexer=bridge, tracking=True)
+
+    # 5. Si PLY detectó errores sintácticos, los mandamos a sys.stderr
+    if _errores_sint:
+        for err in _errores_sint:
+            print(f"[Error Sintactico] {err}", file=sys.stderr)
+    else:
+        # Si la sintaxis es correcta, imprimimos el árbol con sangrías de 2 espacios
+        # para que la interfaz construya los nodos colapsables jerárquicamente
+        def imprimir_arbol_string(nodo, nivel=0):
+            if nodo is None: return
+            valor_str = f" : {nodo.valor}" if (hasattr(nodo, 'valor') and nodo.valor is not None) else ""
+            linea_str = f" (L{nodo.linea})" if (hasattr(nodo, 'linea') and nodo.linea) else ""
+            
+            # Imprimir con sangría de espacios puros (facilita la lectura del QTreeWidget)
+            print(f"{'  ' * nivel}{nodo.tipo}{valor_str}{linea_str}")
+            
+            if hasattr(nodo, 'hijos') and nodo.hijos:
+                for hijo in nodo.hijos:
+                    imprimir_arbol_string(hijo, nivel + 1)
+        
+        imprimir_arbol_string(ast)
+
+# Modificar la sección main para capturar la bandera --sintactico de la rúbrica
+# Reemplaza tu función main() por esta:
+def main():
+    args = sys.argv[1:]
+
+    if "--lexico" not in args and "--sintactico" not in args:
+        print("Uso: python compilador.py --lexico <archivo> o --sintactico <archivo>", file=sys.stderr)
+        sys.exit(1)
+
+    bandera = "--lexico" if "--lexico" in args else "--sintactico"
+    idx = args.index(bandera)
+    
+    if idx + 1 >= len(args):
+        print("[compilador.py] Error: falta ruta del archivo.", file=sys.stderr)
+        sys.exit(1)
+
+    ruta = args[idx + 1]
+    if not os.path.isfile(ruta):
+        print(f"[compilador.py] Error: no existe el archivo: {ruta}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        with open(ruta, "r", encoding="utf-8") as f:
+            codigo = f.read()
+    except Exception as ex:
+        print(f"[compilador.py] Error al leer: {ex}", file=sys.stderr)
+        sys.exit(1)
+
+    if bandera == "--lexico":
+        tokens, errores = analizar(codigo)
+        print(formatear_tokens(tokens))
+        if errores:
+            print(formatear_errores(errores), file=sys.stderr)
+    elif bandera == "--sintactico":
+        ejecutar_sintactico_consola(codigo)
 
 if __name__ == "__main__":
     main()
