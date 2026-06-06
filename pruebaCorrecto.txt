@@ -1,0 +1,8 @@
+int main() {
+    int total = 50;
+    float precio = 12.50;
+    
+    while (total > 0) {
+        total = total - 1;
+    }
+}

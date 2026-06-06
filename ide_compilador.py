@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from highlighter import LexicoHighlighter
 from token_panel import TokenPanel
+from sintactico_panel import SintacticoPanel
 
 import sys, os, subprocess, tempfile
 from PyQt6.QtWidgets import (
@@ -619,9 +620,7 @@ class IDEMainWindow(QMainWindow):
         # ── Resultados del compilador (derecha) ──
         self.nb_results = QTabWidget()
         self.out_lexico = TokenPanel()          # ← panel visual
-        self.out_sint = QTreeWidget()
-        self.out_sint.setHeaderLabel("Estructura Gramatical (AST)")
-        self.out_sint.setAlternatingRowColors(True)
+        self.out_sint   = SintacticoPanel()     # ← árbol sintáctico colapsable
         self.out_sem    = make_output("fg",  "bg")
         self.out_ci     = make_output("fg",  "bg")
         self.nb_results.addTab(self.out_lexico, "Lexico")
@@ -808,8 +807,9 @@ class IDEMainWindow(QMainWindow):
         self.out_lexico.refresh_theme()
         # Refrescar todos los paneles de output
         self.out_lexico.refresh_theme()
+        self.out_sint.refresh_theme()
  
-        for w in (self.out_sint, self.out_sem,
+        for w in (self.out_sem,
                   self.out_ci, self.out_exec,
                   self.err_lexico, self.err_sint, self.err_sem):
             _apply_output_style(w)
@@ -1055,6 +1055,13 @@ class IDEMainWindow(QMainWindow):
                 err = mod.formatear_errores(errores)
                 return out, err
 
+            if flag == "sintactico":
+                import sintactico as sint_mod
+                arbol, errores = sint_mod.analizar_sintactico(codigo)
+                err = sint_mod.formatear_errores_sint(errores)
+                # devolver el árbol como objeto especial
+                return arbol, err
+
             # Para los demás flags aún no implementados:
             return "", f"[Error] Flag '--{flag}' no implementado aún."
 
@@ -1082,14 +1089,14 @@ class IDEMainWindow(QMainWindow):
     def _sintactico(self):
         self.lbl_status.setText("Ejecutando analisis sintactico...")
         QApplication.processEvents()
-        out, err = self._run_compiler("sintactico")
-        # Si el compilador regresó errores en 'err', los mandamos al panel de abajo
-        if err and "[Error" in err:
-            self._set_output(self.out_errores, err) # Asegúrate de mapearlo a tu panel de errores (ej. out_errores o out_exec)
-            self.nb_errors.setCurrentIndex(1) # Cambia automáticamente a la pestaña de errores sintácticos
+        arbol, err = self._run_compiler("sintactico")
+        # arbol es NodoArbol o "" si hubo error al cargar compilador
+        if hasattr(arbol, 'hijos'):
+            n_err = err.count("[ERROR") if err else 0
+            self.out_sint.cargar_arbol(arbol, n_errores=n_err)
         else:
-            # Si no hay errores, limpiamos los paneles de errores e inflamos el árbol visual
-            self.actualizar_arbol_sintactico(out)
+            # falló antes de parsear — mostrar mensaje
+            self.out_sint.cargar_arbol(None)
         self._set_errors(self.err_sint, err)
         self.nb_results.setCurrentWidget(self.out_sint)
         self.dock_results.show(); self.dock_results.raise_()
@@ -1148,41 +1155,6 @@ class IDEMainWindow(QMainWindow):
 
 
 # ══════════════════════════════════════════════════════
-def actualizar_arbol_sintactico(self, texto_consola):
-        """Toma la salida tabulada del compilador y arma el árbol visual colapsable."""
-        self.out_sint.clear()
-        
-        if not texto_consola.strip() or "[Error" in texto_consola:
-            return
-
-        lineas = texto_consola.splitlines()
-        if not lineas:
-            return
-
-        historial_padres = {}
-        
-        for linea in lineas:
-            if not linea.strip(): continue
-            
-            # Calcular el nivel de profundidad contando los espacios iniciales
-            espacios_iniciales = len(linea) - len(linea.lstrip(' '))
-            nivel = espacios_iniciales // 2
-            
-            texto_nodo = linea.strip()
-            item = QTreeWidgetItem([texto_nodo])
-            
-            if nivel == 0:
-                self.out_sint.addTopLevelItem(item)
-            else:
-                padre = historial_padres.get(nivel - 1)
-                if padre:
-                    padre.addChild(item)
-                    
-            historial_padres[nivel] = item
-
-        # RÚBRICA: El árbol sintáctico deberá expandirse automáticamente
-        self.out_sint.expandAll()
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyleSheet(build_stylesheet(C))
