@@ -34,8 +34,8 @@ COLORS = {
 
 PALABRAS_RESERVADAS = [
     "if", "else", "end", "do", "while",
-    "switch", "case", "int", "float",
-    "main", "cin", "cout"
+    "switch", "case", "int", "float", "real",
+    "main", "cin", "cout", "then", "until"
 ]
 
 

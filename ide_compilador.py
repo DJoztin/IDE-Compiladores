@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QHeaderView, QVBoxLayout, QHBoxLayout,
     QFrame, QTreeWidget, QTreeWidgetItem, QDockWidget,
     QPushButton, QAbstractItemView, QMenu, QComboBox,
+    QDialog, QDialogButtonBox,
 )
 from PyQt6.QtGui import (
     QAction, QFont, QColor, QPainter, QTextFormat,
@@ -506,6 +507,185 @@ def _apply_output_style(widget):
 
 
 # ══════════════════════════════════════════════════════
+#  ÁRBOL SINTÁCTICO — PANEL
+# ══════════════════════════════════════════════════════
+_TREE_NODE_COLOR = {
+    "programa":        "#4ec9b0",
+    "lista_sentencias":"#569cd6",
+    "declaracion":     "#569cd6",
+    "tipo":            "#569cd6",
+    "lista_ids":       "#9cdcfe",
+    "asignacion":      "#dcdcaa",
+    "incremento":      "#dcdcaa",
+    "decremento":      "#dcdcaa",
+    "if_stmt":         "#c586c0",
+    "then_branch":     "#c586c0",
+    "else_branch":     "#c586c0",
+    "do_until_stmt":   "#c586c0",
+    "while_stmt":      "#c586c0",
+    "cin_stmt":        "#9cdcfe",
+    "cout_stmt":       "#9cdcfe",
+    "condicion":       "#d7ba7d",
+    "expr_rel":        "#d7ba7d",
+    "expresion":       "#d4d4d4",
+    "termino":         "#b0b0b0",
+    "factor_par":      "#b0b0b0",
+    "negativo":        "#dcdcaa",
+    "reservada":       "#569cd6",
+    "identificador":   "#9cdcfe",
+    "entero":          "#b5cea8",
+    "real_lit":        "#4ec9b0",
+    "op_aritmetico":   "#d4d4d4",
+    "op_relacional":   "#d7ba7d",
+    "op_logico":       "#c586c0",
+    "operador":        "#d4d4d4",
+    "simbolo":         "#606060",
+    "error":           "#f44747",
+}
+
+class SyntaxTreePanel(QWidget):
+    """Panel con árbol sintáctico colapsable."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        # ── barra de estado ──────────────────────────────────
+        self._bar = QFrame()
+        self._bar.setFixedHeight(32)
+        bl = QHBoxLayout(self._bar)
+        bl.setContentsMargins(8, 0, 8, 0)
+        self._lbl_info = QLabel("Árbol Sintáctico")
+        bl.addWidget(self._lbl_info)
+        bl.addStretch()
+        btn_exp  = QPushButton("↕ Expandir todo")
+        btn_col  = QPushButton("↔ Colapsar todo")
+        btn_win  = QPushButton("⊞ Ventana")
+        for b in (btn_exp, btn_col, btn_win):
+            b.setFixedHeight(22)
+            bl.addWidget(b)
+        lay.addWidget(self._bar)
+
+        # ── árbol ────────────────────────────────────────────
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Nodo", "Valor"])
+        self.tree.setColumnWidth(0, 280)
+        self.tree.header().setStretchLastSection(True)
+        self.tree.setAlternatingRowColors(True)
+        lay.addWidget(self.tree)
+
+        btn_exp.clicked.connect(self.tree.expandAll)
+        btn_col.clicked.connect(self.tree.collapseAll)
+        btn_win.clicked.connect(self._abrir_ventana)
+
+        self._refresh_styles()
+
+    # ── estilos ──────────────────────────────────────────────
+    def _refresh_styles(self):
+        self._bar.setStyleSheet(
+            f"background:{C['bg3']}; border-bottom:1px solid {C['separator']};")
+        self._lbl_info.setStyleSheet(
+            f"color:{C['fg_dim']}; font-size:8pt; font-weight:bold;")
+        self.tree.setStyleSheet(
+            f"QTreeWidget {{ background:{C['tree_bg']}; color:{C['fg']};"
+            f"  border:none; outline:none; alternate-background-color:{C['bg2']}; }}"
+            f"QTreeWidget::item {{ padding:2px 4px; }}"
+            f"QTreeWidget::item:hover {{ background:{C['hover']}; }}"
+            f"QTreeWidget::item:selected {{ background:{C['active']}; color:white; }}"
+            f"QTreeWidget::branch {{ background:{C['tree_bg']}; }}"
+            f"QHeaderView::section {{ background:{C['bg3']}; color:{C['fg_dim']};"
+            f"  border:none; border-right:1px solid {C['separator']};"
+            f"  border-bottom:1px solid {C['separator']}; padding:4px 6px;"
+            f"  font-size:8pt; font-weight:bold; }}")
+
+    def refresh_theme(self):
+        self._refresh_styles()
+
+    # ── carga del árbol ──────────────────────────────────────
+    def cargar_arbol(self, nodo_raiz, errores=None):
+        self.tree.clear()
+        if nodo_raiz:
+            item = self._hacer_item(nodo_raiz)
+            self.tree.addTopLevelItem(item)
+            self.tree.expandAll()
+        err_cnt = len(errores) if errores else 0
+        if err_cnt:
+            self._lbl_info.setText(
+                f"Árbol Sintáctico  —  {err_cnt} error(es)")
+            self._lbl_info.setStyleSheet(
+                f"color:{C['red']}; font-size:8pt; font-weight:bold;")
+        else:
+            self._lbl_info.setText("Árbol Sintáctico  —  ✓ Sin errores")
+            self._lbl_info.setStyleSheet(
+                f"color:{C['green']}; font-size:8pt; font-weight:bold;")
+
+    def _hacer_item(self, nodo) -> QTreeWidgetItem:
+        tipo  = nodo.tipo
+        valor = nodo.valor or ""
+        item  = QTreeWidgetItem([tipo, valor])
+        color = QColor(_TREE_NODE_COLOR.get(tipo, C['fg']))
+        item.setForeground(0, color)
+        if valor:
+            item.setForeground(1, QColor(_TREE_NODE_COLOR.get(tipo, C['fg_dim'])))
+        for hijo in nodo.hijos:
+            item.addChild(self._hacer_item(hijo))
+        return item
+
+    def mostrar_error(self, texto: str):
+        self.tree.clear()
+        self._lbl_info.setText("Árbol Sintáctico  —  Error")
+        self._lbl_info.setStyleSheet(
+            f"color:{C['red']}; font-size:8pt; font-weight:bold;")
+        root = QTreeWidgetItem(["ERROR", texto])
+        root.setForeground(0, QColor("#f44747"))
+        self.tree.addTopLevelItem(root)
+
+    # ── ventana separada ─────────────────────────────────────
+    def _abrir_ventana(self):
+        if self.tree.topLevelItemCount() == 0:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Árbol Sintáctico — Vista ampliada")
+        dlg.resize(900, 680)
+        lay = QVBoxLayout(dlg)
+
+        tree2 = QTreeWidget()
+        tree2.setHeaderLabels(["Nodo", "Valor"])
+        tree2.setColumnWidth(0, 340)
+        tree2.header().setStretchLastSection(True)
+        tree2.setAlternatingRowColors(True)
+        tree2.setStyleSheet(self.tree.styleSheet())
+
+        def _copiar(src_item):
+            dst = QTreeWidgetItem([src_item.text(0), src_item.text(1)])
+            dst.setForeground(0, src_item.foreground(0))
+            dst.setForeground(1, src_item.foreground(1))
+            for i in range(src_item.childCount()):
+                dst.addChild(_copiar(src_item.child(i)))
+            return dst
+
+        for i in range(self.tree.topLevelItemCount()):
+            tree2.addTopLevelItem(_copiar(self.tree.topLevelItem(i)))
+        tree2.expandAll()
+
+        bar = QHBoxLayout()
+        b_exp = QPushButton("↕ Expandir todo")
+        b_col = QPushButton("↔ Colapsar todo")
+        b_exp.clicked.connect(tree2.expandAll)
+        b_col.clicked.connect(tree2.collapseAll)
+        bar.addWidget(b_exp); bar.addWidget(b_col); bar.addStretch()
+
+        lay.addLayout(bar)
+        lay.addWidget(tree2)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btns.rejected.connect(dlg.reject)
+        lay.addWidget(btns)
+        dlg.exec()
+
+
+# ══════════════════════════════════════════════════════
 #  VENTANA PRINCIPAL
 # ══════════════════════════════════════════════════════
 class IDEMainWindow(QMainWindow):
@@ -619,7 +799,7 @@ class IDEMainWindow(QMainWindow):
         # ── Resultados del compilador (derecha) ──
         self.nb_results = QTabWidget()
         self.out_lexico = TokenPanel()          # ← panel visual
-        self.out_sint   = make_output("fg",  "bg")
+        self.out_sint   = SyntaxTreePanel()     # ← árbol sintáctico
         self.out_sem    = make_output("fg",  "bg")
         self.out_ci     = make_output("fg",  "bg")
         self.nb_results.addTab(self.out_lexico, "Lexico")
@@ -804,10 +984,8 @@ class IDEMainWindow(QMainWindow):
             
         self.file_explorer.refresh_theme()
         self.out_lexico.refresh_theme()
-        # Refrescar todos los paneles de output
-        self.out_lexico.refresh_theme()
- 
-        for w in (self.out_sint, self.out_sem,
+        self.out_sint.refresh_theme()           # árbol sintáctico
+        for w in (self.out_sem,
                   self.out_ci, self.out_exec,
                   self.err_lexico, self.err_sint, self.err_sem):
             _apply_output_style(w)
@@ -1078,17 +1256,56 @@ class IDEMainWindow(QMainWindow):
         self.lbl_status.setText("Analisis lexico completado")
 
     def _sintactico(self):
-        self.lbl_status.setText("Ejecutando analisis sintactico...")
+        self.lbl_status.setText("Ejecutando análisis sintáctico...")
         QApplication.processEvents()
-        out, err = self._run_compiler("sintactico")
-        self._set_output(self.out_sint, out)
-        self._set_errors(self.err_sint, err)
+
+        path, is_tmp = self._get_source_path()
+        if not path:
+            return
+
+        mod, err_msg = self._load_compilador()
+        if err_msg:
+            self.out_sint.mostrar_error(err_msg)
+            self.nb_results.setCurrentWidget(self.out_sint)
+            self.dock_results.show(); self.dock_results.raise_()
+            return
+
+        errores_sint = []
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                codigo = f.read()
+
+            arbol, errores_lex, errores_sint = mod.analizar_sintactico(codigo)
+
+            if errores_lex:
+                self.out_sint.mostrar_error(
+                    "Hay errores léxicos. Corrígelos antes de analizar sintaxis.")
+                err_txt = mod.formatear_errores(errores_lex)
+                self._set_errors(self.err_sint, err_txt)
+            else:
+                self.out_sint.cargar_arbol(arbol, errores_sint)
+                if errores_sint:
+                    err_txt = mod.formatear_errores_sint(errores_sint)
+                    self._set_errors(self.err_sint, err_txt)
+                else:
+                    self._set_errors(self.err_sint, "")
+
+        except Exception as ex:
+            self.out_sint.mostrar_error(f"Error interno: {ex}")
+        finally:
+            if is_tmp:
+                try:
+                    os.unlink(path)
+                except Exception:
+                    pass
+
         self.nb_results.setCurrentWidget(self.out_sint)
         self.dock_results.show(); self.dock_results.raise_()
-        if err and err.strip():
+        if errores_sint:
             self.nb_errors.setCurrentWidget(self.err_sint)
             self.dock_errors.show(); self.dock_errors.raise_()
-        self.lbl_status.setText("Analisis sintactico completado")
+        ok = "con errores" if errores_sint else "sin errores"
+        self.lbl_status.setText(f"Análisis sintáctico completado ({ok})")
 
     def _semantico(self):
         self.lbl_status.setText("Ejecutando analisis semantico...")
