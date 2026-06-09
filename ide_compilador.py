@@ -265,6 +265,7 @@ class CodeEditor(QPlainTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._gutter = LineNumberArea(self)
+        self._error_sels: list = []
         self.blockCountChanged.connect(self._update_gutter_width)
         self.updateRequest.connect(self._update_gutter_area)
         self.cursorPositionChanged.connect(self._highlight_line)
@@ -315,6 +316,32 @@ class CodeEditor(QPlainTextEdit):
         self._gutter.setGeometry(
             QRect(cr.left(), cr.top(), self._gutter_width(), cr.height()))
 
+    def set_error_lines(self, errores: list):
+        """Marca las líneas con errores con fondo rojo en el editor."""
+        self._error_sels = []
+        doc = self.document()
+        for e in errores:
+            linea = getattr(e, 'linea', 0) - 1
+            if linea < 0:
+                continue
+            block = doc.findBlockByLineNumber(linea)
+            if not block.isValid():
+                continue
+            sel = QTextEdit.ExtraSelection()
+            sel.format.setBackground(QColor("#4a1a1a"))
+            sel.format.setProperty(
+                QTextFormat.Property.FullWidthSelection, True)
+            c = self.textCursor()
+            c.setPosition(block.position())
+            c.clearSelection()
+            sel.cursor = c
+            self._error_sels.append(sel)
+        self._highlight_line()
+
+    def clear_error_lines(self):
+        self._error_sels = []
+        self._highlight_line()
+
     def _highlight_line(self):
         sel = QTextEdit.ExtraSelection()
         sel.format.setBackground(QColor(C['line_hl']))
@@ -322,7 +349,7 @@ class CodeEditor(QPlainTextEdit):
             QTextFormat.Property.FullWidthSelection, True)
         sel.cursor = self.textCursor()
         sel.cursor.clearSelection()
-        self.setExtraSelections([sel])
+        self.setExtraSelections([sel] + self._error_sels)
 
     def _paint_gutter(self, event):
         p = QPainter(self._gutter)
@@ -570,9 +597,12 @@ class SyntaxTreePanel(QWidget):
 
         # ── árbol ────────────────────────────────────────────
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Nodo", "Valor"])
-        self.tree.setColumnWidth(0, 280)
-        self.tree.header().setStretchLastSection(True)
+        self.tree.setHeaderLabels(["Nodo", "Valor", "Ln"])
+        self.tree.setColumnWidth(0, 220)
+        self.tree.setColumnWidth(1, 160)
+        self.tree.setColumnWidth(2, 45)
+        self.tree.header().setStretchLastSection(False)
+        self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.tree.setAlternatingRowColors(True)
         lay.addWidget(self.tree)
 
@@ -624,11 +654,15 @@ class SyntaxTreePanel(QWidget):
     def _hacer_item(self, nodo) -> QTreeWidgetItem:
         tipo  = nodo.tipo
         valor = nodo.valor or ""
-        item  = QTreeWidgetItem([tipo, valor])
+        linea = str(nodo.linea) if getattr(nodo, 'linea', 0) else ""
+        item  = QTreeWidgetItem([tipo, valor, linea])
         color = QColor(_TREE_NODE_COLOR.get(tipo, C['fg']))
         item.setForeground(0, color)
         if valor:
             item.setForeground(1, QColor(_TREE_NODE_COLOR.get(tipo, C['fg_dim'])))
+        if linea:
+            item.setForeground(2, QColor(C['fg_dim']))
+            item.setTextAlignment(2, Qt.AlignmentFlag.AlignRight)
         for hijo in nodo.hijos:
             item.addChild(self._hacer_item(hijo))
         return item
@@ -652,16 +686,20 @@ class SyntaxTreePanel(QWidget):
         lay = QVBoxLayout(dlg)
 
         tree2 = QTreeWidget()
-        tree2.setHeaderLabels(["Nodo", "Valor"])
-        tree2.setColumnWidth(0, 340)
-        tree2.header().setStretchLastSection(True)
+        tree2.setHeaderLabels(["Nodo", "Valor", "Ln"])
+        tree2.setColumnWidth(0, 260)
+        tree2.setColumnWidth(1, 200)
+        tree2.setColumnWidth(2, 50)
+        tree2.header().setStretchLastSection(False)
+        tree2.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         tree2.setAlternatingRowColors(True)
         tree2.setStyleSheet(self.tree.styleSheet())
 
         def _copiar(src_item):
-            dst = QTreeWidgetItem([src_item.text(0), src_item.text(1)])
+            dst = QTreeWidgetItem([src_item.text(0), src_item.text(1), src_item.text(2)])
             dst.setForeground(0, src_item.foreground(0))
             dst.setForeground(1, src_item.foreground(1))
+            dst.setForeground(2, src_item.foreground(2))
             for i in range(src_item.childCount()):
                 dst.addChild(_copiar(src_item.child(i)))
             return dst
@@ -1245,8 +1283,10 @@ class IDEMainWindow(QMainWindow):
     def _lexico(self):
         self.lbl_status.setText("Ejecutando analisis lexico...")
         QApplication.processEvents()
+        if self.editor:
+            self.editor.clear_error_lines()
         out, err = self._run_compiler("lexico")
-        self.out_lexico.cargar_texto(out) 
+        self.out_lexico.cargar_texto(out)
         self._set_errors(self.err_lexico, err)
         self.nb_results.setCurrentWidget(self.out_lexico)
         self.dock_results.show(); self.dock_results.raise_()
@@ -1271,24 +1311,28 @@ class IDEMainWindow(QMainWindow):
             return
 
         errores_sint = []
+        errores_lex  = []
         try:
             with open(path, "r", encoding="utf-8") as f:
                 codigo = f.read()
 
             arbol, errores_lex, errores_sint = mod.analizar_sintactico(codigo)
 
+            # Siempre mostrar el árbol (aunque haya errores)
+            todos = errores_lex + errores_sint
+            self.out_sint.cargar_arbol(arbol, todos)
+
+            # Panel de errores: léxicos + sintácticos juntos
+            partes = []
             if errores_lex:
-                self.out_sint.mostrar_error(
-                    "Hay errores léxicos. Corrígelos antes de analizar sintaxis.")
-                err_txt = mod.formatear_errores(errores_lex)
-                self._set_errors(self.err_sint, err_txt)
-            else:
-                self.out_sint.cargar_arbol(arbol, errores_sint)
-                if errores_sint:
-                    err_txt = mod.formatear_errores_sint(errores_sint)
-                    self._set_errors(self.err_sint, err_txt)
-                else:
-                    self._set_errors(self.err_sint, "")
+                partes.append(mod.formatear_errores(errores_lex))
+            if errores_sint:
+                partes.append(mod.formatear_errores_sint(errores_sint))
+            self._set_errors(self.err_sint, "\n".join(partes) if partes else "")
+
+            # Resaltar líneas con error directamente en el editor
+            if self.editor:
+                self.editor.set_error_lines(todos)
 
         except Exception as ex:
             self.out_sint.mostrar_error(f"Error interno: {ex}")

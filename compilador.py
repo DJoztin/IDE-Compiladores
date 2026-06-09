@@ -358,9 +358,10 @@ def formatear_errores_sint(errores):
 # ═══════════════════════════════════════════════════════════════
 class NodoSint:
     """Nodo del árbol de derivación (parse tree)."""
-    def __init__(self, tipo: str, valor: str = ""):
+    def __init__(self, tipo: str, valor: str = "", linea: int = 0):
         self.tipo  = tipo
         self.valor = valor
+        self.linea = linea
         self.hijos: list = []
 
     def agregar(self, hijo):
@@ -386,7 +387,7 @@ class ErrorSintactico:
 class AnalizadorSintactico:
     """
     Gramática:
-      programa       → 'main' '{' lista_sent '}'
+      programa       → 'main' '(' ')' '{' lista_sent '}'
       lista_sent     → sentencia*
       sentencia      → declaracion | asig_incr | if_stmt
                      | do_until | while_stmt | cin_stmt | cout_stmt
@@ -395,9 +396,9 @@ class AnalizadorSintactico:
       asig_incr      → ID ('=' expresion | '++' | '--') ';'
       if_stmt        → 'if' '(' condicion ')' 'then' lista_sent
                        ('else' lista_sent)? 'end' ';'
-      do_until       → 'do' lista_sent 'until' '(' condicion ')' ';'
+      do_until       → 'do' '{' lista_sent '}' 'until' '(' condicion ')' ';'
       while_stmt     → 'while' '(' condicion ')' '{' lista_sent '}' ';'
-      cin_stmt       → 'cin' ID ';'
+      cin_stmt       → 'cin' '(' ID ')' ';'
       cout_stmt      → 'cout' expresion ';'
       condicion      → expr_rel (('&&'|'||') expr_rel)*
       expr_rel       → expresion (OP_REL expresion)?
@@ -457,12 +458,12 @@ class AnalizadorSintactico:
     def _programa(self) -> NodoSint:
         n = NodoSint("programa", "main")
         t = self._consumir(TK_RESERVADA, "main")
-        if t: n.agregar(NodoSint("reservada", "main"))
-        t = self._consumir(TK_SIMBOLO, "{")
-        if t: n.agregar(NodoSint("simbolo", "{"))
-        n.agregar(self._lista_sent({'else', 'end', 'until', '}'}))
-        t = self._consumir(TK_SIMBOLO, "}")
-        if t: n.agregar(NodoSint("simbolo", "}"))
+        if t: n.linea = t.linea
+        self._consumir(TK_SIMBOLO, "(")
+        self._consumir(TK_SIMBOLO, ")")
+        self._consumir(TK_SIMBOLO, "{")
+        n.agregar(self._lista_sent({'else', 'end', '}'}))
+        self._consumir(TK_SIMBOLO, "}")
         if self._tok() is not None:
             sobrante = self._tok()
             self.errores.append(ErrorSintactico(
@@ -513,20 +514,23 @@ class AnalizadorSintactico:
     def _declaracion(self) -> NodoSint:
         n = NodoSint("declaracion")
         t = self._consumir(TK_RESERVADA)
-        if t: n.agregar(NodoSint("tipo", t.valor))
+        if t:
+            n.valor = t.valor   # "int" / "real" / "float" como valor del nodo
+            n.linea = t.linea
         n.agregar(self._lista_ids())
-        t = self._consumir(TK_SIMBOLO, ";")
-        if t: n.agregar(NodoSint("simbolo", ";"))
+        self._consumir(TK_SIMBOLO, ";")
         return n
 
     def _lista_ids(self) -> NodoSint:
         n = NodoSint("lista_ids")
         t = self._consumir(TK_IDENTIFICADOR)
-        if t: n.agregar(NodoSint("identificador", t.valor))
+        if t:
+            n.linea = t.linea
+            n.agregar(NodoSint("identificador", t.valor, t.linea))
         while self._espera(TK_SIMBOLO, ","):
             self._consumir(TK_SIMBOLO, ",")
             t = self._consumir(TK_IDENTIFICADOR)
-            if t: n.agregar(NodoSint("identificador", t.valor))
+            if t: n.agregar(NodoSint("identificador", t.valor, t.linea))
         return n
 
     def _asig_incr(self) -> NodoSint | None:
@@ -535,29 +539,20 @@ class AnalizadorSintactico:
             return None
         t2 = self._tok()
         if t2 and t2.tipo == TK_ASIGNACION:
-            n = NodoSint("asignacion", f"{id_tok.valor} =")
-            n.agregar(NodoSint("identificador", id_tok.valor))
+            n = NodoSint("asignacion", f"{id_tok.valor} =", id_tok.linea)
             self._consumir(TK_ASIGNACION, "=")
-            n.agregar(NodoSint("simbolo", "="))
             n.agregar(self._expresion())
-            t = self._consumir(TK_SIMBOLO, ";")
-            if t: n.agregar(NodoSint("simbolo", ";"))
+            self._consumir(TK_SIMBOLO, ";")
             return n
         if t2 and t2.tipo == TK_OP_ARIT and t2.valor == '++':
-            n = NodoSint("incremento", f"{id_tok.valor}++")
-            n.agregar(NodoSint("identificador", id_tok.valor))
+            n = NodoSint("incremento", f"{id_tok.valor}++", id_tok.linea)
             self._consumir(TK_OP_ARIT, "++")
-            n.agregar(NodoSint("operador", "++"))
-            t = self._consumir(TK_SIMBOLO, ";")
-            if t: n.agregar(NodoSint("simbolo", ";"))
+            self._consumir(TK_SIMBOLO, ";")
             return n
         if t2 and t2.tipo == TK_OP_ARIT and t2.valor == '--':
-            n = NodoSint("decremento", f"{id_tok.valor}--")
-            n.agregar(NodoSint("identificador", id_tok.valor))
+            n = NodoSint("decremento", f"{id_tok.valor}--", id_tok.linea)
             self._consumir(TK_OP_ARIT, "--")
-            n.agregar(NodoSint("operador", "--"))
-            t = self._consumir(TK_SIMBOLO, ";")
-            if t: n.agregar(NodoSint("simbolo", ";"))
+            self._consumir(TK_SIMBOLO, ";")
             return n
         pos_tok = self._tok()
         lin = pos_tok.linea if pos_tok else id_tok.linea
@@ -569,120 +564,119 @@ class AnalizadorSintactico:
     def _if_stmt(self) -> NodoSint:
         n = NodoSint("if_stmt", "if")
         t = self._consumir(TK_RESERVADA, "if")
-        if t: n.agregar(NodoSint("reservada", "if"))
-        t = self._consumir(TK_SIMBOLO, "(")
-        if t: n.agregar(NodoSint("simbolo", "("))
+        if t: n.linea = t.linea
+        self._consumir(TK_SIMBOLO, "(")
         n.agregar(self._condicion())
-        t = self._consumir(TK_SIMBOLO, ")")
-        if t: n.agregar(NodoSint("simbolo", ")"))
-        t = self._consumir(TK_RESERVADA, "then")
-        if t: n.agregar(NodoSint("reservada", "then"))
+        self._consumir(TK_SIMBOLO, ")")
+        self._consumir(TK_RESERVADA, "then")
 
-        then_n = NodoSint("then_branch", "then")
+        then_n = NodoSint("then_branch", "then", n.linea)
         then_n.agregar(self._lista_sent({'else', 'end'}))
         n.agregar(then_n)
 
         if self._espera(TK_RESERVADA, "else"):
-            self._consumir(TK_RESERVADA, "else")
-            n.agregar(NodoSint("reservada", "else"))
-            else_n = NodoSint("else_branch", "else")
+            et = self._consumir(TK_RESERVADA, "else")
+            else_n = NodoSint("else_branch", "else", et.linea if et else 0)
             else_n.agregar(self._lista_sent({'end'}))
             n.agregar(else_n)
 
-        t = self._consumir(TK_RESERVADA, "end")
-        if t: n.agregar(NodoSint("reservada", "end"))
-        t = self._consumir(TK_SIMBOLO, ";")
-        if t: n.agregar(NodoSint("simbolo", ";"))
+        self._consumir(TK_RESERVADA, "end")
+        self._consumir(TK_SIMBOLO, ";")
         return n
 
     def _do_until(self) -> NodoSint:
         n = NodoSint("do_until_stmt", "do-until")
         t = self._consumir(TK_RESERVADA, "do")
-        if t: n.agregar(NodoSint("reservada", "do"))
-        n.agregar(self._lista_sent({'until'}))
-        t = self._consumir(TK_RESERVADA, "until")
-        if t: n.agregar(NodoSint("reservada", "until"))
-        t = self._consumir(TK_SIMBOLO, "(")
-        if t: n.agregar(NodoSint("simbolo", "("))
+        if t: n.linea = t.linea
+        self._consumir(TK_SIMBOLO, "{")
+        n.agregar(self._lista_sent({'}'}))
+        self._consumir(TK_SIMBOLO, "}")
+        self._consumir(TK_RESERVADA, "until")
+        self._consumir(TK_SIMBOLO, "(")
         n.agregar(self._condicion())
-        t = self._consumir(TK_SIMBOLO, ")")
-        if t: n.agregar(NodoSint("simbolo", ")"))
-        t = self._consumir(TK_SIMBOLO, ";")
-        if t: n.agregar(NodoSint("simbolo", ";"))
+        self._consumir(TK_SIMBOLO, ")")
+        self._consumir(TK_SIMBOLO, ";")
         return n
 
     def _while_stmt(self) -> NodoSint:
         n = NodoSint("while_stmt", "while")
         t = self._consumir(TK_RESERVADA, "while")
-        if t: n.agregar(NodoSint("reservada", "while"))
-        t = self._consumir(TK_SIMBOLO, "(")
-        if t: n.agregar(NodoSint("simbolo", "("))
+        if t: n.linea = t.linea
+        self._consumir(TK_SIMBOLO, "(")
         n.agregar(self._condicion())
-        t = self._consumir(TK_SIMBOLO, ")")
-        if t: n.agregar(NodoSint("simbolo", ")"))
-        t = self._consumir(TK_SIMBOLO, "{")
-        if t: n.agregar(NodoSint("simbolo", "{"))
+        self._consumir(TK_SIMBOLO, ")")
+        self._consumir(TK_SIMBOLO, "{")
         n.agregar(self._lista_sent({'}'}))
-        t = self._consumir(TK_SIMBOLO, "}")
-        if t: n.agregar(NodoSint("simbolo", "}"))
-        t = self._consumir(TK_SIMBOLO, ";")
-        if t: n.agregar(NodoSint("simbolo", ";"))
+        self._consumir(TK_SIMBOLO, "}")
+        self._consumir(TK_SIMBOLO, ";")
         return n
 
     def _cin_stmt(self) -> NodoSint:
         n = NodoSint("cin_stmt", "cin")
         t = self._consumir(TK_RESERVADA, "cin")
-        if t: n.agregar(NodoSint("reservada", "cin"))
+        if t: n.linea = t.linea
+        self._consumir(TK_SIMBOLO, "(")
         t = self._consumir(TK_IDENTIFICADOR)
-        if t: n.agregar(NodoSint("identificador", t.valor))
-        t = self._consumir(TK_SIMBOLO, ";")
-        if t: n.agregar(NodoSint("simbolo", ";"))
+        if t: n.valor = f"cin({t.valor})"
+        self._consumir(TK_SIMBOLO, ")")
+        self._consumir(TK_SIMBOLO, ";")
         return n
 
     def _cout_stmt(self) -> NodoSint:
         n = NodoSint("cout_stmt", "cout")
         t = self._consumir(TK_RESERVADA, "cout")
-        if t: n.agregar(NodoSint("reservada", "cout"))
+        if t: n.linea = t.linea
         n.agregar(self._expresion())
-        t = self._consumir(TK_SIMBOLO, ";")
-        if t: n.agregar(NodoSint("simbolo", ";"))
+        self._consumir(TK_SIMBOLO, ";")
         return n
 
     def _condicion(self) -> NodoSint:
-        n = NodoSint("condicion")
-        n.agregar(self._expr_rel())
+        # El operador lógico es la raíz; operandos son hijos izq/der
+        left = self._expr_rel()
         while self._espera(TK_OP_LOG) and self._tok().valor in ('&&', '||'):
             t = self._consumir(TK_OP_LOG)
-            if t: n.agregar(NodoSint("op_logico", t.valor))
-            n.agregar(self._expr_rel())
-        return n
+            right = self._expr_rel()
+            node = NodoSint("condicion", t.valor, t.linea)
+            node.agregar(left)
+            node.agregar(right)
+            left = node
+        return left
 
     def _expr_rel(self) -> NodoSint:
-        n = NodoSint("expr_rel")
-        n.agregar(self._expresion())
+        # El operador relacional es la raíz; operandos son hijos izq/der
+        left = self._expresion()
         if self._espera(TK_OP_REL):
             t = self._consumir(TK_OP_REL)
-            if t: n.agregar(NodoSint("op_relacional", t.valor))
-            n.agregar(self._expresion())
-        return n
+            right = self._expresion()
+            node = NodoSint("expr_rel", t.valor, t.linea)
+            node.agregar(left)
+            node.agregar(right)
+            return node
+        return left
 
     def _expresion(self) -> NodoSint:
-        n = NodoSint("expresion")
-        n.agregar(self._termino())
+        # El operador + / - es la raíz; operandos son hijos izq/der
+        left = self._termino()
         while self._espera(TK_OP_ARIT) and self._tok().valor in ('+', '-'):
             t = self._consumir(TK_OP_ARIT)
-            if t: n.agregar(NodoSint("op_aritmetico", t.valor))
-            n.agregar(self._termino())
-        return n
+            right = self._termino()
+            node = NodoSint("expresion", t.valor, t.linea)
+            node.agregar(left)
+            node.agregar(right)
+            left = node
+        return left
 
     def _termino(self) -> NodoSint:
-        n = NodoSint("termino")
-        n.agregar(self._factor())
+        # El operador * / / es la raíz; operandos son hijos izq/der
+        left = self._factor()
         while self._espera(TK_OP_ARIT) and self._tok().valor in ('*', '/'):
             t = self._consumir(TK_OP_ARIT)
-            if t: n.agregar(NodoSint("op_aritmetico", t.valor))
-            n.agregar(self._factor())
-        return n
+            right = self._factor()
+            node = NodoSint("termino", t.valor, t.linea)
+            node.agregar(left)
+            node.agregar(right)
+            left = node
+        return left
 
     def _factor(self) -> NodoSint:
         t = self._tok()
@@ -690,32 +684,30 @@ class AnalizadorSintactico:
             self.errores.append(ErrorSintactico("Factor esperado, fin de archivo", 0, 0))
             return NodoSint("error", "EOF")
         if t.tipo == TK_SIMBOLO and t.valor == '(':
-            n = NodoSint("factor_par", "(expr)")
+            # Paréntesis: wrapping sin nodos ( ) extra
+            n = NodoSint("factor_par", "(expr)", t.linea)
             self._consumir(TK_SIMBOLO, "(")
-            n.agregar(NodoSint("simbolo", "("))
             n.agregar(self._expresion())
-            t2 = self._consumir(TK_SIMBOLO, ")")
-            if t2: n.agregar(NodoSint("simbolo", ")"))
+            self._consumir(TK_SIMBOLO, ")")
             return n
         if t.tipo == TK_ENTERO:
             self.pos += 1
-            return NodoSint("entero", t.valor)
+            return NodoSint("entero", t.valor, t.linea)
         if t.tipo == TK_REAL:
             self.pos += 1
-            return NodoSint("real_lit", t.valor)
+            return NodoSint("real_lit", t.valor, t.linea)
         if t.tipo == TK_IDENTIFICADOR:
             self.pos += 1
-            return NodoSint("identificador", t.valor)
+            return NodoSint("identificador", t.valor, t.linea)
         if t.tipo == TK_OP_ARIT and t.valor == '-':
-            n = NodoSint("negativo", "-expr")
+            n = NodoSint("negativo", "-", t.linea)
             self._consumir(TK_OP_ARIT, "-")
-            n.agregar(NodoSint("op_aritmetico", "-"))
             n.agregar(self._factor())
             return n
         self.errores.append(ErrorSintactico(
             f"Factor inválido: '{t.valor}' ({t.tipo})", t.linea, t.columna))
         self.pos += 1
-        return NodoSint("error", t.valor)
+        return NodoSint("error", t.valor, t.linea)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -724,14 +716,13 @@ class AnalizadorSintactico:
 def analizar_sintactico(codigo: str):
     """Lexical → Syntactic analysis.
     Returns (arbol: NodoSint, errores_lex: list, errores_sint: list).
+    Los errores léxicos no bloquean el parseo; se usan los tokens válidos.
     """
     tokens, errores_lex = analizar(codigo)
-    if errores_lex:
-        return None, errores_lex, []
     validos = [t for t in tokens if t.tipo != TK_ERROR]
     parser  = AnalizadorSintactico(validos)
     arbol   = parser.parsear()
-    return arbol, [], parser.errores
+    return arbol, errores_lex, parser.errores
 
 
 # ═══════════════════════════════════════════════════════════════
