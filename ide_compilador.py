@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import (
     QAction, QFont, QColor, QPainter, QTextFormat,
-    QFontMetrics, QKeySequence, QPalette, QIcon, QPixmap,
+    QFontMetrics, QKeySequence, QPalette, QIcon, QPixmap, QPen,
 )
 from PyQt6.QtCore import Qt, QSize, QRect, pyqtSignal
 
@@ -257,6 +257,18 @@ class LineNumberArea(QWidget):
     def paintEvent(self, event):
         self.editor._paint_gutter(event)
 
+def limpiar_ruta(path):
+    """Ruta absoluta con separadores normalizados (C:/a/b -> C:\\a\\b en Windows).
+    QFileDialog devuelve '/' y os.path usa '\\'; sin esto un mismo archivo
+    parecía distinto y se abría dos veces."""
+    return os.path.normpath(os.path.abspath(path)) if path else path
+
+
+def clave_ruta(path):
+    """Clave para comparar rutas: además ignora mayúsculas en Windows."""
+    return os.path.normcase(limpiar_ruta(path)) if path else path
+
+
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
@@ -452,6 +464,7 @@ class FileExplorer(QWidget):
             self.load_folder(f)
 
     def load_folder(self, path):
+        path = limpiar_ruta(path)
         self.root_path = path
         self.tree.clear()
         self.lbl_folder.setText((os.path.basename(path) or path).upper())
@@ -562,6 +575,7 @@ _TREE_NODE_COLOR = {
     "identificador":   "#9cdcfe",
     "entero":          "#b5cea8",
     "real_lit":        "#4ec9b0",
+    "booleano":        "#569cd6",
     "op_aritmetico":   "#d4d4d4",
     "op_relacional":   "#d7ba7d",
     "op_logico":       "#c586c0",
@@ -570,11 +584,135 @@ _TREE_NODE_COLOR = {
     "error":           "#f44747",
 }
 
-class SyntaxTreePanel(QWidget):
-    """Panel con árbol sintáctico colapsable."""
+class BranchTree(QTreeWidget):
+    """QTreeWidget que dibuja las ramas del árbol (├── └── │) con
+    indentación por profundidad, conservando expandir/colapsar.
+    El recuadro [+]/[−] de cada nodo con hijos se puede clicar."""
+
+    INDENT = 22
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setIndentation(self.INDENT)
+        self.setRootIsDecorated(True)
+        self.setUniformRowHeights(True)
+        self.setVerticalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel)
+
+    @staticmethod
+    def _tiene_siguiente(tree, it):
+        p = it.parent()
+        if p is None:
+            return tree.indexOfTopLevelItem(it) < tree.topLevelItemCount() - 1
+        return p.indexOfChild(it) < p.childCount() - 1
+
+    def drawBranches(self, painter, rect, index):
+        item = self.itemFromIndex(index)
+        if item is None:
+            return super().drawBranches(painter, rect, index)
+
+        ind = self.indentation()
+        h = max(1, rect.height())
+        painter.save()
+
+        # Fondo: respeta las filas alternadas del resto de la fila
+        bg = C['tree_bg']
+        if self.alternatingRowColors():
+            fila = (rect.top() + self.verticalScrollBar().value()) // h
+            if fila % 2:
+                bg = C['bg2']
+        painter.fillRect(rect, QColor(bg))
+
+        pen = QPen(QColor(C['fg_dim']))
+        pen.setWidth(1)
+        painter.setPen(pen)
+
+        # cadena: [item, padre, abuelo, ..., raíz]
+        cadena = []
+        it = item
+        while it is not None:
+            cadena.append(it)
+            it = it.parent()
+
+        derecha = rect.right() + 1
+        mid_y = rect.top() + h // 2
+
+        def centro_x(k):  # columna de la rama del nivel k (0 = el propio nodo)
+            return derecha - (k + 1) * ind + ind // 2
+
+        # Líneas verticales "│" de los ancestros que aún tienen hermanos abajo
+        for k in range(1, len(cadena)):
+            anc = cadena[k]
+            if anc.parent() is None and self.topLevelItemCount() == 1:
+                continue
+            if self._tiene_siguiente(self, anc):
+                x = centro_x(k)
+                painter.drawLine(x, rect.top(), x, rect.bottom())
+
+        # Conector del propio nodo: "├──" o "└──"
+        x = centro_x(0)
+        es_raiz_unica = item.parent() is None and self.topLevelItemCount() == 1
+        if not es_raiz_unica:
+            painter.drawLine(x, rect.top(), x, mid_y)
+            if self._tiene_siguiente(self, item):
+                painter.drawLine(x, mid_y, x, rect.bottom())
+        painter.drawLine(x, mid_y, derecha - 2, mid_y)
+
+        # Recuadro [+]/[−] si tiene hijos
+        if item.childCount() > 0:
+            s = 9
+            caja = QRect(x - s // 2, mid_y - s // 2, s, s)
+            painter.fillRect(caja, QColor(bg))
+            painter.setPen(QPen(QColor(C['fg'])))
+            painter.drawRect(caja)
+            painter.drawLine(caja.left() + 2, mid_y, caja.right() - 2, mid_y)
+            if not item.isExpanded():
+                painter.drawLine(x, caja.top() + 2, x, caja.bottom() - 2)
+
+        painter.restore()
+
+
+def arbol_a_texto(tree: QTreeWidget) -> str:
+    """Representación en texto del árbol con ramas (para exportar / copiar)."""
+    lineas = []
+
+    def etiqueta(it):
+        txt = it.text(0)
+        if it.text(1):
+            txt += f"  '{it.text(1)}'"
+        if it.columnCount() > 2 and it.text(2):
+            txt += f"  [L{it.text(2)}]"
+        if it.columnCount() > 3 and it.text(3):
+            txt += f"   ⟨ {it.text(3)} ⟩"
+        return txt
+
+    def rec(it, prefijo, ultimo, es_raiz):
+        if es_raiz:
+            lineas.append(etiqueta(it))
+            nuevo = ""
+        else:
+            lineas.append(prefijo + ("└── " if ultimo else "├── ") + etiqueta(it))
+            nuevo = prefijo + ("    " if ultimo else "│   ")
+        n = it.childCount()
+        for i in range(n):
+            rec(it.child(i), nuevo, i == n - 1, False)
+
+    for i in range(tree.topLevelItemCount()):
+        rec(tree.topLevelItem(i), "", True, True)
+    return "\n".join(lineas)
+
+
+class SyntaxTreePanel(QWidget):
+    """Panel con árbol colapsable. Con `con_atributos=True` agrega la columna
+    de anotaciones semánticas (árbol anotado)."""
+
+    def __init__(self, parent=None, titulo="Árbol Sintáctico",
+                 con_atributos=False, archivo_txt="arbol_sintactico.txt"):
+        super().__init__(parent)
+        self._titulo = titulo
+        self._con_atrib = con_atributos
+        self._archivo_txt = archivo_txt
+        self.fmt_atrib = None          # función nodo -> texto de atributos
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -584,31 +722,39 @@ class SyntaxTreePanel(QWidget):
         self._bar.setFixedHeight(32)
         bl = QHBoxLayout(self._bar)
         bl.setContentsMargins(8, 0, 8, 0)
-        self._lbl_info = QLabel("Árbol Sintáctico")
+        self._lbl_info = QLabel(titulo)
         bl.addWidget(self._lbl_info)
         bl.addStretch()
         btn_exp  = QPushButton("↕ Expandir todo")
         btn_col  = QPushButton("↔ Colapsar todo")
+        btn_txt  = QPushButton("⎘ Exportar .txt")
         btn_win  = QPushButton("⊞ Ventana")
-        for b in (btn_exp, btn_col, btn_win):
+        btn_txt.setToolTip("Guardar el árbol con ramas como archivo de texto")
+        for b in (btn_exp, btn_col, btn_txt, btn_win):
             b.setFixedHeight(22)
             bl.addWidget(b)
         lay.addWidget(self._bar)
 
         # ── árbol ────────────────────────────────────────────
-        self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Nodo", "Valor", "Ln"])
-        self.tree.setColumnWidth(0, 220)
-        self.tree.setColumnWidth(1, 160)
+        self.tree = BranchTree()
+        self.tree.setHeaderLabels(self._headers())
+        self.tree.setColumnWidth(0, 300)
+        self.tree.setColumnWidth(1, 110 if con_atributos else 160)
         self.tree.setColumnWidth(2, 45)
-        self.tree.header().setStretchLastSection(False)
-        self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        if con_atributos:
+            self.tree.setColumnWidth(3, 340)
+            self.tree.header().setStretchLastSection(True)
+        else:
+            self.tree.header().setStretchLastSection(False)
+            self.tree.header().setSectionResizeMode(
+                1, QHeaderView.ResizeMode.Stretch)
         self.tree.setAlternatingRowColors(True)
         lay.addWidget(self.tree)
 
         btn_exp.clicked.connect(self.tree.expandAll)
         btn_col.clicked.connect(self.tree.collapseAll)
         btn_win.clicked.connect(self._abrir_ventana)
+        btn_txt.clicked.connect(self._exportar_txt)
 
         self._refresh_styles()
 
@@ -633,6 +779,10 @@ class SyntaxTreePanel(QWidget):
     def refresh_theme(self):
         self._refresh_styles()
 
+    def _headers(self):
+        h = ["Nodo", "Valor", "Ln"]
+        return h + ["Atributos semánticos"] if self._con_atrib else h
+
     # ── carga del árbol ──────────────────────────────────────
     def cargar_arbol(self, nodo_raiz, errores=None):
         self.tree.clear()
@@ -643,11 +793,11 @@ class SyntaxTreePanel(QWidget):
         err_cnt = len(errores) if errores else 0
         if err_cnt:
             self._lbl_info.setText(
-                f"Árbol Sintáctico  —  {err_cnt} error(es)")
+                f"{self._titulo}  —  {err_cnt} error(es)")
             self._lbl_info.setStyleSheet(
                 f"color:{C['red']}; font-size:8pt; font-weight:bold;")
         else:
-            self._lbl_info.setText("Árbol Sintáctico  —  ✓ Sin errores")
+            self._lbl_info.setText(f"{self._titulo}  —  ✓ Sin errores")
             self._lbl_info.setStyleSheet(
                 f"color:{C['green']}; font-size:8pt; font-weight:bold;")
 
@@ -655,7 +805,21 @@ class SyntaxTreePanel(QWidget):
         tipo  = nodo.tipo
         valor = nodo.valor or ""
         linea = str(nodo.linea) if getattr(nodo, 'linea', 0) else ""
-        item  = QTreeWidgetItem([tipo, valor, linea])
+        cols  = [tipo, valor, linea]
+        atrib = ""
+        if self._con_atrib:
+            atrib = self.fmt_atrib(nodo) if self.fmt_atrib else ""
+            cols.append(atrib)
+        item  = QTreeWidgetItem(cols)
+        if atrib:
+            if "✗" in atrib:
+                c_at = C['red']
+            elif "conv" in atrib:
+                c_at = C['orange']
+            else:
+                c_at = C['green']
+            item.setForeground(3, QColor(c_at))
+            item.setToolTip(3, atrib)
         color = QColor(_TREE_NODE_COLOR.get(tipo, C['fg']))
         item.setForeground(0, color)
         if valor:
@@ -669,40 +833,48 @@ class SyntaxTreePanel(QWidget):
 
     def mostrar_error(self, texto: str):
         self.tree.clear()
-        self._lbl_info.setText("Árbol Sintáctico  —  Error")
+        self._lbl_info.setText(f"{self._titulo}  —  Error")
         self._lbl_info.setStyleSheet(
             f"color:{C['red']}; font-size:8pt; font-weight:bold;")
         root = QTreeWidgetItem(["ERROR", texto])
         root.setForeground(0, QColor("#f44747"))
         self.tree.addTopLevelItem(root)
 
+    # ── exportar ─────────────────────────────────────────────
+    def _exportar_txt(self):
+        if self.tree.topLevelItemCount() == 0:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exportar árbol", self._archivo_txt,
+            "Texto (*.txt);;Todos (*.*)")
+        if path:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(arbol_a_texto(self.tree) + "\n")
+
     # ── ventana separada ─────────────────────────────────────
     def _abrir_ventana(self):
         if self.tree.topLevelItemCount() == 0:
             return
         dlg = QDialog(self)
-        dlg.setWindowTitle("Árbol Sintáctico — Vista ampliada")
+        dlg.setWindowTitle(f"{self._titulo} — Vista ampliada")
         dlg.resize(900, 680)
         lay = QVBoxLayout(dlg)
 
-        tree2 = QTreeWidget()
-        tree2.setHeaderLabels(["Nodo", "Valor", "Ln"])
-        tree2.setColumnWidth(0, 260)
+        tree2 = BranchTree()
+        tree2.setHeaderLabels(self._headers())
+        tree2.setColumnWidth(0, 380)
         tree2.setColumnWidth(1, 200)
         tree2.setColumnWidth(2, 50)
-        tree2.header().setStretchLastSection(False)
-        tree2.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        if self._con_atrib:
+            tree2.setColumnWidth(1, 140)
+            tree2.header().setStretchLastSection(True)
+        else:
+            tree2.header().setStretchLastSection(False)
+            tree2.header().setSectionResizeMode(
+                1, QHeaderView.ResizeMode.Stretch)
         tree2.setAlternatingRowColors(True)
         tree2.setStyleSheet(self.tree.styleSheet())
-
-        def _copiar(src_item):
-            dst = QTreeWidgetItem([src_item.text(0), src_item.text(1), src_item.text(2)])
-            dst.setForeground(0, src_item.foreground(0))
-            dst.setForeground(1, src_item.foreground(1))
-            dst.setForeground(2, src_item.foreground(2))
-            for i in range(src_item.childCount()):
-                dst.addChild(_copiar(src_item.child(i)))
-            return dst
+        _copiar = copiar_item
 
         for i in range(self.tree.topLevelItemCount()):
             tree2.addTopLevelItem(_copiar(self.tree.topLevelItem(i)))
@@ -721,6 +893,195 @@ class SyntaxTreePanel(QWidget):
         btns.rejected.connect(dlg.reject)
         lay.addWidget(btns)
         dlg.exec()
+
+
+def copiar_item(src_item):
+    """Copia profunda de un QTreeWidgetItem (texto, colores y tooltips)."""
+    n = src_item.columnCount()
+    dst = QTreeWidgetItem([src_item.text(i) for i in range(n)])
+    for i in range(n):
+        dst.setForeground(i, src_item.foreground(i))
+        if src_item.toolTip(i):
+            dst.setToolTip(i, src_item.toolTip(i))
+    for i in range(src_item.childCount()):
+        dst.addChild(copiar_item(src_item.child(i)))
+    return dst
+
+
+# ══════════════════════════════════════════════════════
+#  ANÁLISIS SEMÁNTICO — PANEL
+# ══════════════════════════════════════════════════════
+class SemanticPanel(QWidget):
+    """AST original · AST anotado · Recorrido (bitácora) + comparar/exportar."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._res = None
+        self._mod = None
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        self._bar = QFrame()
+        self._bar.setFixedHeight(32)
+        bl = QHBoxLayout(self._bar)
+        bl.setContentsMargins(8, 0, 8, 0)
+        self._lbl = QLabel("Análisis Semántico")
+        bl.addWidget(self._lbl)
+        bl.addStretch()
+        b_cmp = QPushButton("⊞ Comparar AST")
+        b_exp = QPushButton("⎘ Exportar evidencias")
+        b_cmp.setToolTip("AST original y AST anotado lado a lado")
+        b_exp.setToolTip("Guarda árbol, árbol anotado, tabla, recorrido y "
+                         "errores como archivos .txt")
+        for b in (b_cmp, b_exp):
+            b.setFixedHeight(22)
+            bl.addWidget(b)
+        b_cmp.clicked.connect(self._comparar)
+        b_exp.clicked.connect(self._exportar)
+        lay.addWidget(self._bar)
+
+        self.tabs = QTabWidget()
+        self.ast_original = SyntaxTreePanel(
+            titulo="AST original", archivo_txt="arbol_sintactico.txt")
+        self.ast_anotado = SyntaxTreePanel(
+            titulo="AST anotado", con_atributos=True,
+            archivo_txt="arbol_anotado.txt")
+        self.recorrido = make_output("fg", "bg")
+        self.tabs.addTab(self.ast_anotado,  "AST anotado")
+        self.tabs.addTab(self.ast_original, "AST original")
+        self.tabs.addTab(self.recorrido,    "Recorrido")
+        lay.addWidget(self.tabs)
+        self._refresh_styles()
+
+    def _refresh_styles(self):
+        self._bar.setStyleSheet(
+            f"background:{C['bg3']}; border-bottom:1px solid {C['separator']};")
+        self._lbl.setStyleSheet(
+            f"color:{C['fg_dim']}; font-size:8pt; font-weight:bold;")
+
+    def refresh_theme(self):
+        self._refresh_styles()
+        self.ast_original.refresh_theme()
+        self.ast_anotado.refresh_theme()
+        _apply_output_style(self.recorrido)
+
+    def cargar(self, res, mod):
+        self._res, self._mod = res, mod
+        self.ast_original.cargar_arbol(res.arbol, [])
+        self.ast_anotado.fmt_atrib = mod.texto_atributos
+        self.ast_anotado.cargar_arbol(res.anotado, res.errores_sem)
+        self.recorrido.setPlainText(mod.formatear_bitacora(res.bitacora))
+        n = len(res.errores_sem)
+        self._lbl.setText(
+            f"Análisis Semántico  —  {len(res.tabla)} símbolo(s), "
+            + (f"{n} error(es)" if n else "✓ sin errores"))
+        self._lbl.setStyleSheet(
+            f"color:{C['red'] if n else C['green']}; font-size:8pt;"
+            f" font-weight:bold;")
+        self.tabs.setCurrentWidget(self.ast_anotado)
+
+    def mostrar_error(self, texto):
+        self._res = None
+        self.ast_anotado.mostrar_error(texto)
+        self.ast_original.mostrar_error(texto)
+        self.recorrido.setPlainText(texto)
+        self._lbl.setText("Análisis Semántico  —  no ejecutado")
+        self._lbl.setStyleSheet(
+            f"color:{C['red']}; font-size:8pt; font-weight:bold;")
+
+    def _comparar(self):
+        if not self._res:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("AST original  →  AST con anotaciones semánticas")
+        dlg.resize(1500, 820)
+        lay = QVBoxLayout(dlg)
+        split = QSplitter(Qt.Orientation.Horizontal)
+        arboles = []
+        for titulo, panel in (("AST original", self.ast_original),
+                              ("AST anotado", self.ast_anotado)):
+            cont = QWidget()
+            cl = QVBoxLayout(cont)
+            cl.setContentsMargins(0, 0, 0, 0)
+            lbl = QLabel(titulo)
+            lbl.setStyleSheet(f"color:{C['fg_dim']}; font-weight:bold;"
+                              f" padding:4px;")
+            cl.addWidget(lbl)
+            t = BranchTree()
+            t.setHeaderLabels(panel._headers())
+            t.setColumnWidth(0, 300)
+            t.setColumnWidth(1, 110)
+            t.setColumnWidth(2, 40)
+            t.setAlternatingRowColors(True)
+            t.setStyleSheet(panel.tree.styleSheet())
+            for i in range(panel.tree.topLevelItemCount()):
+                t.addTopLevelItem(copiar_item(panel.tree.topLevelItem(i)))
+            t.expandAll()
+            cl.addWidget(t)
+            split.addWidget(cont)
+            arboles.append(t)
+        split.setSizes([600, 900])
+        # expandir/colapsar sincronizado (misma forma de árbol)
+        def _ruta(t, it):
+            r = []
+            while it is not None:
+                p = it.parent()
+                r.append(p.indexOfChild(it) if p else t.indexOfTopLevelItem(it))
+                it = p
+            return r[::-1]
+        def _item(t, ruta):
+            it = t.topLevelItem(ruta[0]) if ruta else None
+            for i in ruta[1:]:
+                if it is None:
+                    return None
+                it = it.child(i)
+            return it
+        def _sync(origen, destino, expandir):
+            def f(it):
+                d = _item(destino, _ruta(origen, it))
+                if d is not None and d.isExpanded() != expandir:
+                    d.setExpanded(expandir)
+            return f
+        a, b = arboles
+        a.itemExpanded.connect(_sync(a, b, True))
+        a.itemCollapsed.connect(_sync(a, b, False))
+        b.itemExpanded.connect(_sync(b, a, True))
+        b.itemCollapsed.connect(_sync(b, a, False))
+        # scroll sincronizado
+        a.verticalScrollBar().valueChanged.connect(b.verticalScrollBar().setValue)
+        b.verticalScrollBar().valueChanged.connect(a.verticalScrollBar().setValue)
+        lay.addWidget(split)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btns.rejected.connect(dlg.reject)
+        lay.addWidget(btns)
+        dlg.exec()
+
+    def _exportar(self):
+        if not self._res:
+            QMessageBox.information(self, "Exportar evidencias",
+                                    "Primero ejecuta el análisis semántico.")
+            return
+        carpeta = QFileDialog.getExistingDirectory(
+            self, "Carpeta donde guardar las evidencias")
+        if not carpeta:
+            return
+        m, r = self._mod, self._res
+        archivos = {
+            "arbol_sintactico.txt": m.arbol_texto(r.arbol),
+            "arbol_anotado.txt":    m.arbol_texto(r.anotado, con_atributos=True),
+            "tabla_simbolos.txt":   m.formatear_tabla(r.tabla),
+            "recorrido_semantico.txt": m.formatear_bitacora(r.bitacora),
+            "errores_semanticos.txt":
+                m.formatear_errores_sem(r.errores_sem) or "(sin errores semánticos)",
+        }
+        for nombre, contenido in archivos.items():
+            with open(os.path.join(carpeta, nombre), "w",
+                      encoding="utf-8") as f:
+                f.write(contenido + "\n")
+        QMessageBox.information(
+            self, "Exportar evidencias",
+            "Se guardaron:\n" + "\n".join(archivos) + f"\n\nen {carpeta}")
 
 
 # ══════════════════════════════════════════════════════
@@ -763,11 +1124,9 @@ class IDEMainWindow(QMainWindow):
 
     def _new_tab(self, path=None, content=""):
         """Crea un nuevo tab con un CodeEditor."""
+        path = limpiar_ruta(path) if path else None
         editor = CodeEditor()
-        hl = LexicoHighlighter(editor.document())
-        editor._highlighter = hl 
-        editor = CodeEditor()
-        editor._highlighter = LexicoHighlighter(editor.document())  # ← agregar
+        editor._highlighter = LexicoHighlighter(editor.document())
         editor.document().setPlainText(content)
         editor.document().setModified(False)
         editor.cursorPositionChanged.connect(self._update_cursor)
@@ -779,7 +1138,7 @@ class IDEMainWindow(QMainWindow):
         self.file_tabs.setCurrentIndex(idx)
 
         if path:
-            self._editors[path] = editor
+            self._editors[clave_ruta(path)] = editor
         else:
             # Clave temporal por id de objeto
             self._editors[id(editor)] = editor
@@ -838,7 +1197,7 @@ class IDEMainWindow(QMainWindow):
         self.nb_results = QTabWidget()
         self.out_lexico = TokenPanel()          # ← panel visual
         self.out_sint   = SyntaxTreePanel()     # ← árbol sintáctico
-        self.out_sem    = make_output("fg",  "bg")
+        self.out_sem    = SemanticPanel()       # ← árbol anotado / recorrido
         self.out_ci     = make_output("fg",  "bg")
         self.nb_results.addTab(self.out_lexico, "Lexico")
         self.nb_results.addTab(self.out_sint,   "Sintactico")
@@ -846,11 +1205,12 @@ class IDEMainWindow(QMainWindow):
         self.nb_results.addTab(self.out_ci,     "Cod. Intermedio")
  
 
-        self.symbol_table = QTableWidget(0, 5)
+        self.symbol_table = QTableWidget(0, 6)
         self.symbol_table.setHorizontalHeaderLabels(
-            ["Nombre", "Tipo", "Valor", "Linea", "Alcance"])
+            ["Nombre", "Tipo", "Loc", "Valor", "Ámbito", "Líneas"])
         self.symbol_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch)
+            QHeaderView.ResizeMode.ResizeToContents)
+        self.symbol_table.horizontalHeader().setStretchLastSection(True)
         self.symbol_table.verticalHeader().setVisible(False)
         self.symbol_table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers)
@@ -1023,8 +1383,8 @@ class IDEMainWindow(QMainWindow):
         self.file_explorer.refresh_theme()
         self.out_lexico.refresh_theme()
         self.out_sint.refresh_theme()           # árbol sintáctico
-        for w in (self.out_sem,
-                  self.out_ci, self.out_exec,
+        self.out_sem.refresh_theme()            # panel semántico
+        for w in (self.out_ci, self.out_exec,
                   self.err_lexico, self.err_sint, self.err_sem):
             _apply_output_style(w)
  
@@ -1119,15 +1479,16 @@ class IDEMainWindow(QMainWindow):
             self.dock_explorer.show()
 
     def _open_file(self, path):
-        path = os.path.abspath(path)
+        path = limpiar_ruta(path)
 
         # Si ya esta abierto, solo enfocarlo
-        for i in range(self.file_tabs.count()):
-            w = self.file_tabs.widget(i)
-            if isinstance(w, CodeEditor) and w._file_path == path:
-                self.file_tabs.setCurrentIndex(i)
-                self._explorer_reveal(path)
-                return
+        i = self._tab_de_ruta(path)
+        if i >= 0:
+            self.file_tabs.setCurrentIndex(i)
+            self._explorer_reveal(path)
+            self.lbl_status.setText(
+                f"Ya abierto: {os.path.basename(path)}")
+            return
         try:
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -1137,7 +1498,7 @@ class IDEMainWindow(QMainWindow):
 
             # Cargar carpeta padre en explorador si no esta ya cargada
             folder = os.path.dirname(path)
-            if self.file_explorer.root_path != folder:
+            if clave_ruta(self.file_explorer.root_path) != clave_ruta(folder):
                 self.file_explorer.load_folder(folder)
                 self.dock_explorer.show()
             self._explorer_reveal(path)
@@ -1145,16 +1506,26 @@ class IDEMainWindow(QMainWindow):
             QMessageBox.warning(self, "Error al abrir",
                                 f"No se pudo abrir:\n{ex}")
 
+    def _tab_de_ruta(self, path, excepto=None):
+        """Índice de la pestaña que tiene abierto `path` (o -1)."""
+        clave = clave_ruta(path)
+        for i in range(self.file_tabs.count()):
+            w = self.file_tabs.widget(i)
+            if (isinstance(w, CodeEditor) and w is not excepto
+                    and w._file_path and clave_ruta(w._file_path) == clave):
+                return i
+        return -1
+
     def _explorer_reveal(self, path):
         """Selecciona y hace visible el archivo en el arbol del explorador."""
         root = self.file_explorer.tree.invisibleRootItem()
-        self._find_and_select(root, os.path.abspath(path))
+        self._find_and_select(root, clave_ruta(path))
 
     def _find_and_select(self, parent, path):
         for i in range(parent.childCount()):
             item = parent.child(i)
             item_path = item.data(0, Qt.ItemDataRole.UserRole)
-            if item_path and os.path.abspath(item_path) == path:
+            if item_path and clave_ruta(item_path) == path:
                 self.file_explorer.tree.setCurrentItem(item)
                 self.file_explorer.tree.scrollToItem(item)
                 return True
@@ -1181,7 +1552,7 @@ class IDEMainWindow(QMainWindow):
             if r != QMessageBox.StandardButton.Yes:
                 return
         # Eliminar del mapa
-        key = w._file_path if w._file_path else id(w)
+        key = clave_ruta(w._file_path) if w._file_path else id(w)
         self._editors.pop(key, None)
         self.file_tabs.removeTab(idx)
         # Si no quedan tabs, crear uno vacío
@@ -1205,12 +1576,28 @@ class IDEMainWindow(QMainWindow):
             self, "Guardar como", "",
             "Codigo fuente (*.txt *.c *.cl *.lng);;Todos (*.*)")
         if path:
+            path = limpiar_ruta(path)
+            # ¿Ese archivo ya está abierto en otra pestaña?
+            otra = self._tab_de_ruta(path, excepto=e)
+            if otra >= 0:
+                w = self.file_tabs.widget(otra)
+                if w.document().isModified():
+                    QMessageBox.warning(
+                        self, "Archivo abierto",
+                        f"'{os.path.basename(path)}' está abierto en otra "
+                        f"pestaña con cambios sin guardar.\n"
+                        f"Guárdalo o ciérralo primero.")
+                    return
+                # Sin cambios: se cierra la pestaña vieja para no duplicar
+                self._editors.pop(clave_ruta(path), None)
+                self.file_tabs.removeTab(otra)
             # Si antes era sin titulo, actualizar clave
-            old_key = e._file_path if e._file_path else id(e)
+            old_key = clave_ruta(e._file_path) if e._file_path else id(e)
             self._editors.pop(old_key, None)
             e._file_path = path
-            self._editors[path] = e
+            self._editors[clave_ruta(path)] = e
             self._write_file(e, path)
+            self._on_tab_changed(self.file_tabs.currentIndex())
 
     def _write_file(self, editor, path):
         with open(path, "w", encoding="utf-8") as f:
@@ -1352,17 +1739,94 @@ class IDEMainWindow(QMainWindow):
         self.lbl_status.setText(f"Análisis sintáctico completado ({ok})")
 
     def _semantico(self):
-        self.lbl_status.setText("Ejecutando analisis semantico...")
+        self.lbl_status.setText("Ejecutando análisis semántico...")
         QApplication.processEvents()
-        out, err = self._run_compiler("semantico")
-        self._set_output(self.out_sem, out)
-        self._set_errors(self.err_sem, err)
+
+        path, is_tmp = self._get_source_path()
+        if not path:
+            return
+        mod, err_msg = self._load_compilador()
+        if err_msg:
+            self.out_sem.mostrar_error(err_msg)
+            self.nb_results.setCurrentWidget(self.out_sem)
+            self.dock_results.show(); self.dock_results.raise_()
+            return
+
+        hay_errores = False
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                codigo = f.read()
+            r = mod.analizar_semantico(codigo)
+
+            if not r.ejecutado:
+                # El semántico necesita un AST sin errores previos
+                partes = ["No se ejecutó el análisis semántico: corrige "
+                          "primero los errores léxicos/sintácticos.", ""]
+                if r.errores_lex:
+                    partes.append(mod.formatear_errores(r.errores_lex))
+                if r.errores_sint:
+                    partes.append(mod.formatear_errores_sint(r.errores_sint))
+                texto = "\n".join(partes)
+                self.out_sem.mostrar_error("Hay errores léxicos/sintácticos")
+                self._llenar_tabla_simbolos(None, mod)
+                self._set_errors(self.err_sem, texto)
+                if self.editor:
+                    self.editor.set_error_lines(
+                        r.errores_lex + r.errores_sint)
+                hay_errores = True
+                estado = "no ejecutado (errores previos)"
+            else:
+                self.out_sint.cargar_arbol(r.arbol, [])
+                self.out_sem.cargar(r, mod)
+                self._llenar_tabla_simbolos(r.tabla, mod)
+                self._set_errors(self.err_sem,
+                                 mod.formatear_errores_sem(r.errores_sem))
+                if self.editor:
+                    self.editor.set_error_lines(r.errores_sem)
+                hay_errores = bool(r.errores_sem)
+                estado = (f"{len(r.errores_sem)} error(es)" if hay_errores
+                          else "sin errores")
+        except Exception as ex:
+            import traceback
+            self.out_sem.mostrar_error(f"Error interno: {ex}")
+            self._set_errors(self.err_sem, traceback.format_exc())
+            hay_errores = True
+            estado = "error interno"
+        finally:
+            if is_tmp:
+                try:
+                    os.unlink(path)
+                except Exception:
+                    pass
+
         self.nb_results.setCurrentWidget(self.out_sem)
         self.dock_results.show(); self.dock_results.raise_()
-        if err and err.strip():
+        if hay_errores:
             self.nb_errors.setCurrentWidget(self.err_sem)
             self.dock_errors.show(); self.dock_errors.raise_()
-        self.lbl_status.setText("Analisis semantico completado")
+        self.lbl_status.setText(f"Análisis semántico completado ({estado})")
+
+    def _llenar_tabla_simbolos(self, tabla, mod):
+        from PyQt6.QtWidgets import QTableWidgetItem
+        t = self.symbol_table
+        t.setRowCount(0)
+        if tabla is None:
+            return
+        for s in tabla.simbolos():
+            fila = t.rowCount()
+            t.insertRow(fila)
+            datos = [s.nombre, s.tipo_decl, str(s.loc),
+                     mod.fmt_valor(s.valor), "main",
+                     ", ".join(str(l) for l in s.lineas)]
+            for c, d in enumerate(datos):
+                it = QTableWidgetItem(d)
+                if c in (2, 3):
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if c == 0:
+                    it.setForeground(QColor(_TREE_NODE_COLOR["identificador"]))
+                elif c == 1:
+                    it.setForeground(QColor(_TREE_NODE_COLOR["declaracion"]))
+                t.setItem(fila, c, it)
 
     def _codigo_intermedio(self):
         self.lbl_status.setText("Generando codigo intermedio...")

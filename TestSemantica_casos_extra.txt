@@ -1,0 +1,28 @@
+main() {
+    int i, j;
+    float r;
+    bool f, g;
+    int i;
+    real r2;
+    f = true;
+    g = false;
+    i = 5;
+    j = i + true;
+    f = 10;
+    i = f;
+    r = i * 2;
+    r2 = r / 2;
+    if (i) then
+        j = 1;
+    end;
+    while (f == 3) {
+        j = j + 1;
+    };
+    do {
+        i++;
+    } until (i + 1);
+    f++;
+    while (f && i) { j = 0; };
+    j = 4 / 0;
+    cout(k);
+}
