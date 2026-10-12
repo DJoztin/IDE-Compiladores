@@ -742,7 +742,11 @@ class SyntaxTreePanel(QWidget):
         self.tree.setColumnWidth(1, 110 if con_atributos else 160)
         self.tree.setColumnWidth(2, 45)
         if con_atributos:
-            self.tree.setColumnWidth(3, 340)
+            self.tree.setColumnWidth(3, 420)
+            self.tree.headerItem().setToolTip(
+                3, "↑sintetizado: se calcula a partir de los hijos y sube al padre\n"
+                   "↓heredado: viene del padre / contexto (dtype de la declaración)\n"
+                   "(tabla): obtenido de la tabla de símbolos")
             self.tree.header().setStretchLastSection(True)
         else:
             self.tree.header().setStretchLastSection(False)
@@ -1816,7 +1820,7 @@ class IDEMainWindow(QMainWindow):
             fila = t.rowCount()
             t.insertRow(fila)
             datos = [s.nombre, s.tipo_decl, str(s.loc),
-                     mod.fmt_valor(s.valor), "main",
+                     mod.valor_simbolo(s), "main",
                      ", ".join(str(l) for l in s.lineas)]
             for c, d in enumerate(datos):
                 it = QTableWidgetItem(d)

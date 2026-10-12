@@ -231,18 +231,18 @@ Generar ejecutable: `pyinstaller IDE.spec` (produce `Ide.exe`).
 | `chk` | — | ✓ / ✗ de la verificación |
 
 ### Reglas de tipos
-- `+ - * /`: int/float; int op float → float (coerción del int). `int / int` = división entera (trunca).
+- `+ - *`: int/float; int op float → float (coerción del int). `/`: con algún float → float; int/int exacta (sin residuo, valores conocidos) → int (`8/2` = 4); con residuo o valores desconocidos → float (`1/3` = 0.33, ambos operandos se convierten a float).
 - `< > <= >=`: numéricos → bool. `== !=`: numéricos o bool con bool → bool.
 - `&& ||`: bool con bool → bool. `-` unario: numérico.
 - Asignación: igual tipo ✓; float ← int ✓ (conversión); int ← float ✗ (conversión no válida); bool ↔ numérico ✗.
 - `++ --`: sólo numéricos. Condiciones de `if`/`while`/`until`: deben ser bool.
 
 ### Errores semánticos
-Identificador no declarado · Declaración duplicada · Incompatibilidad de tipos · Conversión no válida · Uso indebido de operador · Inconsistencia en asignación · Condición no booleana · División entre cero (constante).
+Variable sin valor asignado (lectura, `++` o `--` antes de asignarle valor; tras un `if` sólo cuenta si se asignó en ambas ramas; lo asignado dentro de un `while` no cuenta después, el de un `do-until` sí; una asignación con error también inicializa para no encadenar errores) · Identificador no declarado · Declaración duplicada · Incompatibilidad de tipos · Conversión no válida · Uso indebido de operador · Inconsistencia en asignación · Condición no booleana · División entre cero (constante).
 Formato: `[ERROR SEMÁNTICO] Línea X, Columna Y: [categoría] mensaje`
 
 ### IDE
 - Pestaña *Semántico*: AST anotado (columna "Atributos semánticos"), AST original, Recorrido (bitácora INSERTAR/BUSCAR/TIPO/CONVERTIR/VERIFICAR/VALOR), botón *Comparar AST* (lado a lado, expandir/colapsar y scroll sincronizados), botón *Exportar evidencias* (5 .txt).
 - *Tabla de Símbolos*: Nombre, Tipo, Loc, Valor, Ámbito, Líneas.
 - Árboles con ramas dibujadas (├── └── │), colapsables, exportables a .txt.
-- Archivos de prueba: `TestSemantica_adaptado.txt` (el test oficial en nuestra sintaxis, mismas líneas; 6 errores) y `TestSemantica_casos_extra.txt` (cubre las 7 categorías; 11 errores).
+- Archivos de prueba: `TestSemantica_adaptado.txt` (el test oficial en nuestra sintaxis, mismas líneas; 9 errores) y `TestSemantica_casos_extra.txt` (cubre las 7 categorías + división entre cero y variable sin valor; 13 errores).

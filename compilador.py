@@ -774,6 +774,7 @@ ERR_OPERADOR       = "Uso indebido de operador"
 ERR_ASIGNACION     = "Inconsistencia de tipos en asignación"
 ERR_CONDICION      = "Condición no booleana"
 ERR_DIV_CERO       = "División entre cero"
+ERR_SIN_VALOR      = "Variable sin valor asignado"
 
 
 class _Desconocido:
@@ -791,8 +792,15 @@ def fmt_valor(v):
     if isinstance(v, bool):
         return "true" if v else "false"
     if isinstance(v, float):
-        return repr(round(v, 6))
+        return repr(round(v, 2))       # se muestra con 2 decimales
     return str(v)
+
+
+def valor_simbolo(sim) -> str:
+    """Valor para la tabla: distingue 'sin asignar' de 'desconocido'."""
+    if not sim.inicializada:
+        return "sin asignar"
+    return fmt_valor(sim.valor)
 
 
 class ErrorSemantico:
@@ -824,6 +832,7 @@ class Simbolo:
         self.columna    = columna
         self.lineas     = [linea]                 # todas las líneas donde aparece
         self.valor      = DESCONOCIDO             # último valor conocido
+        self.inicializada = False                 # ¿ya recibió un valor?
 
 
 class TablaSimbolos:
@@ -865,6 +874,14 @@ class TablaSimbolos:
         for n, v in foto.items():
             if n in self._tabla:
                 self._tabla[n].valor = v
+
+    # Estado de inicialización (para if / ciclos)
+    def foto_inicializadas(self) -> set:
+        return {n for n, s in self._tabla.items() if s.inicializada}
+
+    def restaurar_inicializadas(self, nombres: set):
+        for n, s in self._tabla.items():
+            s.inicializada = n in nombres
 
     def __len__(self):
         return len(self._tabla)
@@ -918,7 +935,7 @@ class AnalizadorSemantico:
         self.tabla.registrar_linea(nombre, nodo.linea)
         self._log(nodo.linea, "BUSCAR",
                   f"'{nombre}' → {sim.tipo_decl}, loc {sim.loc}, "
-                  f"valor {fmt_valor(sim.valor)}")
+                  f"valor {valor_simbolo(sim)}")
         return sim
 
     # ── entrada ────────────────────────────────────────────────
@@ -979,6 +996,9 @@ class AnalizadorSemantico:
 
         t_var = sim.tipo
         _anotar(n, tipo=t_var, de_tabla=True)
+        # La variable queda inicializada aunque la asignación tenga error,
+        # para no generar errores en cascada en sus usos posteriores.
+        sim.inicializada = True
         if t_exp == T_ERROR:                      # error ya reportado abajo
             _anotar(n, chk=False)
             return
@@ -1026,6 +1046,12 @@ class AnalizadorSemantico:
             self._error(f"El operador '{op}' no se puede aplicar a "
                         f"'{nombre}' ({sim.tipo_decl})", n, ERR_OPERADOR)
             return
+        if not sim.inicializada:
+            _anotar(n, chk=False)
+            self._error(f"No se puede aplicar '{op}' a '{nombre}': "
+                        f"la variable no tiene un valor asignado",
+                        n, ERR_SIN_VALOR)
+            return
         if sim.valor is not DESCONOCIDO:
             sim.valor = sim.valor + (1 if op == "++" else -1)
         _anotar(n, chk=True, valor=sim.valor)
@@ -1051,6 +1077,7 @@ class AnalizadorSemantico:
                         ERR_NO_DECLARADA, columna=col)
             return
         sim.valor = DESCONOCIDO                   # se conoce en ejecución
+        sim.inicializada = True
         _anotar(n, tipo=sim.tipo, de_tabla=True, chk=True,
                 valor=DESCONOCIDO)
         self._log(n.linea, "VALOR",
@@ -1080,13 +1107,24 @@ class AnalizadorSemantico:
         if cond is not None:
             self._condicion(cond, "if", n)
         antes = self.tabla.foto_valores()
+        antes_ini = self.tabla.foto_inicializadas()
         then_b = next((h for h in n.hijos if h.tipo == "then_branch"), None)
         else_b = next((h for h in n.hijos if h.tipo == "else_branch"), None)
         self._sentencia(then_b)
         tras_then = self.tabla.foto_valores()
+        ini_then = self.tabla.foto_inicializadas()
         self.tabla.restaurar_valores(antes)
+        self.tabla.restaurar_inicializadas(antes_ini)
         self._sentencia(else_b)
         tras_else = self.tabla.foto_valores()
+        ini_else = self.tabla.foto_inicializadas()
+        # Sólo queda inicializada si lo está en AMBAS ramas
+        self.tabla.restaurar_inicializadas(ini_then & ini_else)
+        solo_una = sorted((ini_then ^ ini_else) - antes_ini)
+        if solo_una:
+            self._log(n.linea, "VALOR",
+                      "fin del if: " + ", ".join(solo_una) +
+                      " → sin asignar (sólo se asigna en una rama)")
         # Fusión: sólo se conserva el valor si ambas ramas coinciden
         desconocidas = []
         for nombre, v_else in tras_else.items():
@@ -1118,10 +1156,18 @@ class AnalizadorSemantico:
         cond  = n.hijos[0] if n.hijos else None
         cuerpo = n.hijos[1] if len(n.hijos) > 1 else None
         self._invalidar_asignadas(cuerpo, n.linea, "inicio del while")
+        antes_ini = self.tabla.foto_inicializadas()
         if cond is not None:
             self._condicion(cond, "while", n)
         self._sentencia(cuerpo)
         self._invalidar_asignadas(cuerpo, n.linea, "fin del while")
+        # El cuerpo de un while puede no ejecutarse nunca
+        nuevas = sorted(self.tabla.foto_inicializadas() - antes_ini)
+        self.tabla.restaurar_inicializadas(antes_ini)
+        if nuevas:
+            self._log(n.linea, "VALOR",
+                      "fin del while: " + ", ".join(nuevas) +
+                      " → sin asignar (el ciclo podría no ejecutarse)")
 
     def _s_do_until_stmt(self, n):
         cuerpo = n.hijos[0] if n.hijos else None
@@ -1155,6 +1201,12 @@ class AnalizadorSemantico:
                             ERR_NO_DECLARADA)
                 return T_ERROR, DESCONOCIDO
             _anotar(n, loc=sim.loc, de_tabla=True)
+            if not sim.inicializada:
+                _anotar(n, chk=False)
+                self._error(f"La variable '{n.valor}' se usa sin tener un "
+                            f"valor asignado", n, ERR_SIN_VALOR)
+                # conserva su tipo para no encadenar más errores
+                return sim.tipo, DESCONOCIDO
             return sim.tipo, sim.valor
         if k == "factor_par":
             return self._expr(n.hijos[0]) if n.hijos else (T_ERROR, DESCONOCIDO)
@@ -1187,22 +1239,35 @@ class AnalizadorSemantico:
                 self._error(f"El operador '{op}' no se puede aplicar a {malo}",
                             n, ERR_OPERADOR)
                 return T_ERROR, DESCONOCIDO
-            t = T_FLOAT if T_FLOAT in (ti, td) else T_INT
-            self._coercion(n, izq, ti, der, td, t)
-            v = DESCONOCIDO
             if op == "/" and vd is not DESCONOCIDO and vd == 0:
                 self._error("División entre cero", n, ERR_DIV_CERO)
                 return T_ERROR, DESCONOCIDO
+            exacta = False
+            if T_FLOAT in (ti, td):
+                t = T_FLOAT
+            elif op == "/":
+                # int / int: si la división es exacta (sin residuo) el
+                # resultado se queda int (8/2 = 4); si tiene residuo o no se
+                # conocen los valores, es float (1/3 = 0.33)
+                exacta = conocidos and vi % vd == 0
+                t = T_INT if exacta else T_FLOAT
+            else:
+                t = T_INT
+            self._coercion(n, izq, ti, der, td, t)
+            v = DESCONOCIDO
             if conocidos:
                 if op == "+":   v = vi + vd
                 elif op == "-": v = vi - vd
                 elif op == "*": v = vi * vd
+                elif t == T_INT:
+                    v = vi // vd                  # división exacta
                 else:
-                    v = int(vi / vd) if t == T_INT else float(vi) / float(vd)
+                    v = float(vi) / float(vd)
                 if t == T_FLOAT:
                     v = float(v)
             self._log(n.linea, "TIPO",
                       f"{_desc(n)} : {ti} {op} {td} → {t}"
+                      + (" (división exacta)" if exacta else "")
                       + (f"  (valor {fmt_valor(v)})" if v is not DESCONOCIDO else ""))
             return t, v
 
@@ -1272,19 +1337,21 @@ def texto_atributos(n) -> str:
     a = getattr(n, "atrib", None)
     if not a:
         return ""
+    SINT, HER = "↑sintetizado", "↓heredado"
     partes = []
     if "dtype" in a:
-        partes.append(f"dtype={a['dtype']}" +
-                      (" ↓heredado" if a.get("heredado") else ""))
+        # en 'declaracion' se sintetiza del token; hacia los ids se hereda
+        partes.append(f"dtype={a['dtype']} " +
+                      (HER if a.get("heredado") else SINT))
     if "loc" in a:
-        partes.append(f"loc={a['loc']}")
+        partes.append(f"loc={a['loc']} (tabla)")
     if "asig" in a:
         partes.append(a["asig"])
     elif "tipo" in a:
-        partes.append(f"tipo={a['tipo']}" +
-                      (" (tabla)" if a.get("de_tabla") else " ↑"))
+        partes.append(f"tipo={a['tipo']} {SINT}" +
+                      (" de tabla" if a.get("de_tabla") else ""))
     if "valor" in a and a.get("tipo") != T_ERROR:
-        partes.append(f"val={fmt_valor(a['valor'])}")
+        partes.append(f"val={fmt_valor(a['valor'])} {SINT}")
     if "conv" in a:
         partes.append(f"conv {a['conv']}")
     if "chk" in a:
@@ -1325,12 +1392,12 @@ def arbol_texto(raiz, con_atributos=False) -> str:
 def formatear_tabla(tabla: TablaSimbolos) -> str:
     sep = "═" * 72
     filas = [sep,
-             f"  {'NOMBRE':<12} {'TIPO':<7} {'LOC':>4}  {'VALOR':<10} "
+             f"  {'NOMBRE':<12} {'TIPO':<7} {'LOC':>4}  {'VALOR':<11} "
              f"{'ÁMBITO':<7} LÍNEAS",
              sep]
     for s in tabla.simbolos():
         filas.append(f"  {s.nombre:<12} {s.tipo_decl:<7} {s.loc:>4}  "
-                     f"{fmt_valor(s.valor):<10} {'main':<7} "
+                     f"{valor_simbolo(s):<11} {'main':<7} "
                      + ", ".join(str(l) for l in s.lineas))
     filas.append(sep)
     filas.append(f"  Total de símbolos: {len(tabla)}")

@@ -1,5 +1,5 @@
 main() {
-    int i, j;
+    int i, j, w;
     float r;
     bool f, g;
     int i;
@@ -25,4 +25,6 @@ main() {
     while (f && i) { j = 0; };
     j = 4 / 0;
     cout(k);
+    w++;
+    j = w * 2;
 }
