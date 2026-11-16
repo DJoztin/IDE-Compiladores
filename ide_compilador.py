@@ -10,13 +10,14 @@ from PyQt6.QtWidgets import (
     QTableWidget, QHeaderView, QVBoxLayout, QHBoxLayout,
     QFrame, QTreeWidget, QTreeWidgetItem, QDockWidget,
     QPushButton, QAbstractItemView, QMenu, QComboBox,
-    QDialog, QDialogButtonBox,
+    QDialog, QDialogButtonBox, QLineEdit, QCheckBox, QStackedWidget,
+    QTableWidgetItem,
 )
 from PyQt6.QtGui import (
     QAction, QFont, QColor, QPainter, QTextFormat,
     QFontMetrics, QKeySequence, QPalette, QIcon, QPixmap, QPen,
 )
-from PyQt6.QtCore import Qt, QSize, QRect, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, QRect, pyqtSignal, QTimer
 
 # ══════════════════════════════════════════════════════
 #  TEMAS
@@ -273,6 +274,56 @@ def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
+MODULOS_COMPILADOR = ("compilador", "code_tm", "cgen", "intermedio", "tm")
+
+
+def cargar_compilador():
+    """Importa compilador.py (y sus módulos de generación: code_tm, cgen,
+    intermedio, tm) desde su ruta real, recargándolos cada vez.
+    Funciona igual con 'python ide_compilador.py' y con el .exe."""
+    import importlib.util
+    compiler_path = resource_path("compilador.py")
+    if not os.path.isfile(compiler_path):
+        return None, (f"[Error] No se encontró 'compilador.py' en:\n"
+                      f"{os.path.dirname(compiler_path)}")
+    carpeta = os.path.dirname(compiler_path)
+    if carpeta not in sys.path:
+        sys.path.insert(0, carpeta)
+    for nombre in MODULOS_COMPILADOR:
+        sys.modules.pop(nombre, None)
+    spec = importlib.util.spec_from_file_location("compilador", compiler_path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["compilador"] = mod
+    spec.loader.exec_module(mod)
+    return mod, None
+
+
+def autoprueba(fuente, salida, entradas):
+    """Ide.exe --autoprueba prog.txt resultado.txt [entradas...]
+    Compila con el mismo cargador que F8/F9, ejecuta el .tm en la TM y
+    escribe el resultado en 'salida'. Sirve para probar el .exe."""
+    lineas = []
+    try:
+        mod, err = cargar_compilador()
+        if err:
+            raise RuntimeError(err)
+        import tm as tm_mod
+        with open(fuente, encoding="utf-8") as f:
+            r = mod.compilar(f.read(), None)
+        lineas.append(f"ok={r.ok} instrucciones={len(r.instrucciones)}")
+        if r.ok:
+            m = tm_mod.MaquinaTM()
+            errs = m.cargar(r.codigo_tm)
+            st, sal = m.ejecutar(entradas)
+            lineas.append(f"carga={errs} estado={st}")
+            lineas.append("OUT " + " ".join(tm_mod.fmt_valor(v) for v in sal))
+    except Exception as ex:
+        import traceback
+        lineas.append("ERROR " + traceback.format_exc())
+    with open(salida, "w", encoding="utf-8") as f:
+        f.write("\n".join(lineas) + "\n")
+
+
 class CodeEditor(QPlainTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -569,6 +620,7 @@ _TREE_NODE_COLOR = {
     "expr_rel":        "#d7ba7d",
     "expresion":       "#d4d4d4",
     "termino":         "#b0b0b0",
+    "potencia":        "#ce9178",
     "factor_par":      "#b0b0b0",
     "negativo":        "#dcdcaa",
     "reservada":       "#569cd6",
@@ -1089,6 +1141,665 @@ class SemanticPanel(QWidget):
 
 
 # ══════════════════════════════════════════════════════
+#  CÓDIGO INTERMEDIO (.tm y .ci) — PANEL
+# ══════════════════════════════════════════════════════
+_TM_CATEGORIA = {
+    "LD": "mem", "ST": "mem", "LDA": "mem", "LDC": "mem",
+    "ADD": "arit", "SUB": "arit", "MUL": "arit", "DIV": "arit",
+    "JLT": "salto", "JLE": "salto", "JGT": "salto", "JGE": "salto",
+    "JEQ": "salto", "JNE": "salto",
+    "IN": "es", "OUT": "es", "HALT": "halt",
+}
+_TM_COLOR = {"mem": "#569cd6", "arit": "#4ec9b0", "salto": "#c586c0",
+             "es": "#d7ba7d", "halt": "#f44747"}
+
+
+def _boton_barra(texto, tip=""):
+    b = QPushButton(texto)
+    b.setFixedHeight(22)
+    if tip:
+        b.setToolTip(tip)
+    return b
+
+
+class CodigoPanel(QWidget):
+    """Muestra el código generado: .tm (tabla / archivo) y .ci."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._r = None
+        self._fuente = ""
+        self._fila_pc = {}
+        self._pc_resaltado = None
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        self._bar = QFrame()
+        self._bar.setFixedHeight(32)
+        bl = QHBoxLayout(self._bar)
+        bl.setContentsMargins(8, 0, 8, 0)
+        self._lbl = QLabel("Código Intermedio — sin generar (F8)")
+        bl.addWidget(self._lbl)
+        bl.addStretch()
+        self.b_tm = _boton_barra("💾 Guardar .tm", "Guardar el código TM en otro archivo")
+        self.b_ci = _boton_barra("💾 Guardar .ci", "Guardar el código de tres direcciones")
+        self.b_cp = _boton_barra("⎘ Copiar", "Copiar al portapapeles la vista actual")
+        for b in (self.b_tm, self.b_ci, self.b_cp):
+            bl.addWidget(b)
+        self.b_tm.clicked.connect(lambda: self._guardar("tm"))
+        self.b_ci.clicked.connect(lambda: self._guardar("ci"))
+        self.b_cp.clicked.connect(self._copiar)
+        lay.addWidget(self._bar)
+
+        self._aviso = QLabel("")
+        self._aviso.setWordWrap(True)
+        self._aviso.hide()
+        lay.addWidget(self._aviso)
+
+        self.tabs = QTabWidget()
+        # ── .tm ──
+        tm_w = QWidget()
+        tl = QVBoxLayout(tm_w)
+        tl.setContentsMargins(0, 0, 0, 0)
+        tl.setSpacing(0)
+        vbar = QFrame()
+        vbar.setFixedHeight(28)
+        vl = QHBoxLayout(vbar)
+        vl.setContentsMargins(6, 0, 6, 0)
+        self.btn_tabla = QPushButton("Tabla")
+        self.btn_archivo = QPushButton("Archivo")
+        for b in (self.btn_tabla, self.btn_archivo):
+            b.setCheckable(True)
+            b.setFixedHeight(22)
+            vl.addWidget(b)
+        vl.addStretch()
+        self._lbl_leyenda = QLabel("")
+        vl.addWidget(self._lbl_leyenda)
+        self._vbar = vbar
+        tl.addWidget(vbar)
+
+        self.stack = QStackedWidget()
+        self.tabla = QTableWidget(0, 4)
+        self.tabla.setHorizontalHeaderLabels(["Dir", "Instrucción", "Operandos", "Comentario"])
+        self.tabla.verticalHeader().setVisible(False)
+        self.tabla.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tabla.setAlternatingRowColors(True)
+        hh = self.tabla.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        hh.setStretchLastSection(True)
+        self.tabla.setFont(QFont("Consolas", 10))
+        self.tabla.verticalHeader().setDefaultSectionSize(21)
+        self.archivo = make_output("fg", "bg")
+        self.archivo.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.stack.addWidget(self.tabla)
+        self.stack.addWidget(self.archivo)
+        tl.addWidget(self.stack)
+        self.btn_tabla.clicked.connect(lambda: self._vista(0))
+        self.btn_archivo.clicked.connect(lambda: self._vista(1))
+        self._vista(0)
+
+        self.ci = make_output("fg", "bg")
+        self.ci.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.tabs.addTab(tm_w, "Código TM (.tm)")
+        self.tabs.addTab(self.ci, "Código intermedio de tres direcciones (.ci)")
+        lay.addWidget(self.tabs)
+        self._refresh_styles()
+        self.limpiar()
+
+    # ── estilo ──
+    def _refresh_styles(self):
+        self._bar.setStyleSheet(
+            f"background:{C['bg3']}; border-bottom:1px solid {C['separator']};")
+        self._vbar.setStyleSheet(f"background:{C['bg2']};")
+        self._aviso.setStyleSheet(
+            f"background:{C['orange']}; color:#1e1e1e; padding:4px 8px;"
+            f" font-weight:bold;")
+        self._color_lbl(self._lbl_color if hasattr(self, "_lbl_color") else "fg_dim")
+        chk = (f"QPushButton {{ color:{C['fg_dim']}; border:1px solid {C['border']};"
+               f" padding:1px 10px; }} QPushButton:checked {{ background:{C['active']};"
+               f" color:white; }}")
+        self.btn_tabla.setStyleSheet(chk)
+        self.btn_archivo.setStyleSheet(chk)
+        ley = "  ".join(f"<span style='color:{_TM_COLOR[k]}'>■</span> {t}" for k, t in
+                        (("mem", "carga/almacén"), ("arit", "aritmética"),
+                         ("salto", "saltos"), ("es", "E/S")))
+        self._lbl_leyenda.setText(ley)
+        self._lbl_leyenda.setStyleSheet(f"color:{C['fg_dim']}; font-size:8pt;")
+
+    def _color_lbl(self, clave):
+        self._lbl_color = clave
+        self._lbl.setStyleSheet(f"color:{C[clave]}; font-size:8pt; font-weight:bold;")
+
+    def refresh_theme(self):
+        self._refresh_styles()
+        _apply_output_style(self.archivo)
+        _apply_output_style(self.ci)
+        if self._r is not None:
+            self._llenar_tabla()
+
+    def _vista(self, i):
+        self.stack.setCurrentIndex(i)
+        self.btn_tabla.setChecked(i == 0)
+        self.btn_archivo.setChecked(i == 1)
+
+    # ── contenido ──
+    def limpiar(self, mensaje="Código Intermedio — sin generar (F8)", error=False):
+        self._r = None
+        self._fila_pc = {}
+        self._pc_resaltado = None
+        self.tabla.setRowCount(0)
+        self.archivo.setPlainText("")
+        self.ci.setPlainText("")
+        self._lbl.setText(mensaje)
+        self._color_lbl("red" if error else "fg_dim")
+        self._aviso.hide()
+        for b in (self.b_tm, self.b_ci, self.b_cp):
+            b.setEnabled(False)
+        if error:
+            self.archivo.setPlainText(mensaje)
+            self.ci.setPlainText(mensaje)
+
+    def cargar(self, r, nombre_fuente):
+        import datetime
+        self._r = r
+        self._fuente = nombre_fuente
+        self._llenar_tabla()
+        self.archivo.setPlainText(r.codigo_tm)
+        self.ci.setPlainText(r.codigo_ci)
+        hora = datetime.datetime.now().strftime("%H:%M:%S")
+        self._lbl.setText(f"{nombre_fuente}  ·  generado {hora}  ·  "
+                          f"{len(r.instrucciones)} instrucciones TM")
+        self._color_lbl("green")
+        self._aviso.hide()
+        self.tabla.setEnabled(True)
+        for b in (self.b_tm, self.b_ci, self.b_cp):
+            b.setEnabled(True)
+        self.tabs.setCurrentIndex(0)
+
+    @staticmethod
+    def _operandos(ins):
+        _loc, op, a1, a2, a3 = ins[:5]
+        if op in ("HALT", "IN", "OUT", "ADD", "SUB", "MUL", "DIV"):
+            return f"{a1},{a2},{a3}"
+        d = repr(a2) if isinstance(a2, float) else str(a2)
+        return f"{a1},{d}({a3})"
+
+    def _llenar_tabla(self):
+        t = self.tabla
+        t.setRowCount(0)
+        self._fila_pc = {}
+        self._pc_resaltado = None
+        for fila, ins in enumerate(self._r.instrucciones):
+            loc, op = ins[0], ins[1]
+            t.insertRow(fila)
+            color = QColor(_TM_COLOR[_TM_CATEGORIA.get(op, "mem")])
+            datos = [str(loc), op, self._operandos(ins), ins[5]]
+            for c, d in enumerate(datos):
+                it = QTableWidgetItem(d)
+                if c == 0:
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignRight |
+                                        Qt.AlignmentFlag.AlignVCenter)
+                    it.setForeground(QColor(C['fg_dim']))
+                elif c in (1, 2):
+                    it.setForeground(color)
+                    if c == 1:
+                        f = it.font(); f.setBold(True); it.setFont(f)
+                else:
+                    it.setForeground(QColor(C['fg_dim']))
+                t.setItem(fila, c, it)
+            self._fila_pc[loc] = fila
+
+    def marcar_desactualizado(self, si=True):
+        if self._r is None:
+            return
+        if si:
+            self._aviso.setText("⚠ desactualizado — el fuente cambió, vuelve a compilar (F8 / F9)")
+            self._aviso.show()
+            self.tabla.setEnabled(False)
+        else:
+            self._aviso.hide()
+            self.tabla.setEnabled(True)
+
+    def resaltar_pc(self, pc):
+        """Resalta la fila de la instrucción que la TM va a ejecutar."""
+        t = self.tabla
+        if self._pc_resaltado is not None and self._pc_resaltado < t.rowCount():
+            for c in range(t.columnCount()):
+                it = t.item(self._pc_resaltado, c)
+                if it:
+                    it.setBackground(QColor(0, 0, 0, 0))
+        self._pc_resaltado = None
+        fila = self._fila_pc.get(pc)
+        if fila is None:
+            return
+        for c in range(t.columnCount()):
+            it = t.item(fila, c)
+            if it:
+                it.setBackground(QColor(C['selection']))
+        self._pc_resaltado = fila
+        t.scrollToItem(t.item(fila, 0))
+
+    def _guardar(self, cual):
+        if self._r is None:
+            return
+        base = os.path.splitext(self._fuente or "programa")[0]
+        path, _ = QFileDialog.getSaveFileName(
+            self, f"Guardar .{cual}", f"{base}.{cual}",
+            f"Código {'TM' if cual == 'tm' else 'intermedio'} (*.{cual});;Todos (*.*)")
+        if path:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self._r.codigo_tm if cual == "tm" else self._r.codigo_ci)
+
+    def _copiar(self):
+        if self._r is None:
+            return
+        if self.tabs.currentIndex() == 1:
+            txt = self._r.codigo_ci
+        else:
+            txt = self._r.codigo_tm
+        QApplication.clipboard().setText(txt)
+
+
+# ══════════════════════════════════════════════════════
+#  MÁQUINA TM — PANEL (consola, registros, memoria)
+# ══════════════════════════════════════════════════════
+class TMPanel(QWidget):
+    """Simulador TM integrado. Ejecuta por lotes con QTimer para no
+    congelar la interfaz; cuando la TM pide IN se pausa hasta que el
+    usuario escribe un valor."""
+
+    ejecutar_pedido = pyqtSignal()       # F9: recompilar y ejecutar
+    pc_cambiado = pyqtSignal(int)
+    estado = pyqtSignal(str)
+
+    LOTE = 20000          # pasos por tick
+    LOTE_TRAZA = 300
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.tm = None                    # módulo tm
+        self.m = None                     # MaquinaTM
+        self.consola = None               # ConsolaTM (comandos h v i d r c)
+        self._tabla_sim = None
+        self._corriendo = False
+        self._modo = None                 # 'g' o 's'
+        self._pasos_rest = 0
+        self._contador = 0
+        self._esperando = False
+        self._desactualizado = False
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._tick)
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        split = QSplitter(Qt.Orientation.Horizontal)
+        lay.addWidget(split)
+
+        # ── izquierda: botones, consola, entrada ──
+        izq = QWidget()
+        il = QVBoxLayout(izq)
+        il.setContentsMargins(0, 0, 0, 0)
+        il.setSpacing(0)
+        self._bar = QFrame()
+        self._bar.setFixedHeight(32)
+        bl = QHBoxLayout(self._bar)
+        bl.setContentsMargins(6, 0, 6, 0)
+        self.b_run = _boton_barra("▶ Ejecutar (g)", "Recompila el fuente actual y lo ejecuta (F9)")
+        self.b_step = _boton_barra("Paso (s)", "Ejecuta una instrucción")
+        self.b_reset = _boton_barra("Reiniciar (c)", "Reinicia registros y memoria")
+        self.b_stop = _boton_barra("■ Detener", "Detiene la ejecución")
+        for b in (self.b_run, self.b_step, self.b_reset, self.b_stop):
+            bl.addWidget(b)
+        self.chk_traza = QCheckBox("Rastreo (t)")
+        self.chk_contar = QCheckBox("Contar instrucciones (p)")
+        bl.addSpacing(10)
+        bl.addWidget(self.chk_traza)
+        bl.addWidget(self.chk_contar)
+        bl.addStretch()
+        self._lbl = QLabel("Máquina TM")
+        bl.addWidget(self._lbl)
+        il.addWidget(self._bar)
+
+        self.out = QPlainTextEdit()
+        self.out.setReadOnly(True)
+        self.out.setMaximumBlockCount(20000)
+        self.out.setFont(QFont("Consolas", 10))
+        il.addWidget(self.out)
+
+        ent = QFrame()
+        el = QHBoxLayout(ent)
+        el.setContentsMargins(6, 3, 6, 3)
+        self._lbl_ent = QLabel("Comando TM (h=ayuda):")
+        self.entrada = QLineEdit()
+        self.entrada.setFont(QFont("Consolas", 10))
+        self.entrada.returnPressed.connect(self._enter)
+        el.addWidget(self._lbl_ent)
+        el.addWidget(self.entrada)
+        self._ent = ent
+        il.addWidget(ent)
+        split.addWidget(izq)
+
+        # ── derecha: registros y memoria ──
+        der = QWidget()
+        dl = QVBoxLayout(der)
+        dl.setContentsMargins(0, 0, 0, 0)
+        dl.setSpacing(0)
+        self._lbl_reg = QLabel("  REGISTROS")
+        dl.addWidget(self._lbl_reg)
+        self.t_reg = QTableWidget(8, 3)
+        self.t_reg.setHorizontalHeaderLabels(["Reg", "Alias", "Valor"])
+        self._lbl_mem = QLabel("  MEMORIA DE VARIABLES")
+        self.t_mem = QTableWidget(0, 3)
+        self.t_mem.setHorizontalHeaderLabels(["Nombre", "loc", "Valor"])
+        for t in (self.t_reg, self.t_mem):
+            t.verticalHeader().setVisible(False)
+            t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+            t.horizontalHeader().setStretchLastSection(True)
+            t.setAlternatingRowColors(True)
+            t.verticalHeader().setDefaultSectionSize(20)
+        self.t_reg.setFixedHeight(8 * 20 + 30)
+        dl.addWidget(self.t_reg)
+        dl.addWidget(self._lbl_mem)
+        dl.addWidget(self.t_mem)
+        split.addWidget(der)
+        split.setSizes([680, 300])
+
+        self.b_run.clicked.connect(self.ejecutar_pedido.emit)
+        self.b_step.clicked.connect(lambda: self._iniciar("s", 1))
+        self.b_reset.clicked.connect(self._reiniciar)
+        self.b_stop.clicked.connect(self.detener)
+        self.chk_traza.toggled.connect(self._sync_flags)
+        self.chk_contar.toggled.connect(self._sync_flags)
+        self._refresh_styles()
+        self._actualizar_botones()
+        self._escribir("Simulador TM: compila y ejecuta con F9 (o ▶ Ejecutar).", "dim")
+
+    # ── estilo ──
+    def _refresh_styles(self):
+        self._bar.setStyleSheet(
+            f"background:{C['bg3']}; border-bottom:1px solid {C['separator']};")
+        self._ent.setStyleSheet(f"background:{C['bg2']};")
+        self.out.setStyleSheet(
+            f"background:{C['terminal_bg']}; color:{C['green']}; border:none;"
+            f" font-family:Consolas; font-size:10pt;")
+        estilo_ent = (f"background:{C['bg']}; color:{C['fg']};"
+                      f" border:1px solid {C['border']}; padding:2px;")
+        if self._esperando:
+            estilo_ent = (f"background:{C['bg']}; color:{C['fg']};"
+                          f" border:2px solid {C['orange']}; padding:2px;")
+        self.entrada.setStyleSheet(estilo_ent)
+        self._lbl_ent.setStyleSheet(
+            f"color:{C['orange'] if self._esperando else C['fg_dim']}; font-weight:bold;")
+        for l in (self._lbl_reg, self._lbl_mem):
+            l.setStyleSheet(f"background:{C['bg3']}; color:{C['fg_dim']};"
+                            f" font-size:8pt; font-weight:bold; padding:4px;")
+        self._lbl.setStyleSheet(f"color:{C['fg_dim']}; font-size:8pt; font-weight:bold;")
+
+    def refresh_theme(self):
+        self._refresh_styles()
+
+    # ── consola ──
+    def _escribir(self, texto, tipo="normal"):
+        import html
+        color = {"normal": C['green'], "dim": C['fg_dim'], "err": C['red'],
+                 "out": C['fg'], "in": C['orange'], "ok": C['active']}.get(tipo, C['green'])
+        for linea in texto.split("\n"):
+            peso = "bold" if tipo in ("out", "err") else "normal"
+            self.out.appendHtml(
+                f"<span style='color:{color}; font-weight:{peso};"
+                f" white-space:pre'>{html.escape(linea) or '&nbsp;'}</span>")
+        self.out.verticalScrollBar().setValue(self.out.verticalScrollBar().maximum())
+
+    def limpiar(self, mensaje=""):
+        self.detener(silencioso=True)
+        self.m = None
+        self.consola = None
+        self._tabla_sim = None
+        self.out.clear()
+        self.t_mem.setRowCount(0)
+        for i in range(8):
+            for c in range(3):
+                self.t_reg.setItem(i, c, QTableWidgetItem(""))
+        if mensaje:
+            self._escribir(mensaje, "err")
+        self._desactualizado = False
+        self._actualizar_botones()
+
+    def cargar_programa(self, tm_mod, texto_tm, tabla, texto_ci, nombre):
+        """Carga el texto del .tm recién generado (lo parsea la TM)."""
+        self.detener(silencioso=True)
+        self.tm = tm_mod
+        self.m = tm_mod.MaquinaTM()
+        errores = self.m.cargar(texto_tm)
+        self._tabla_sim = tabla
+        self.out.clear()
+        self._desactualizado = False
+        if errores:
+            for e in errores:
+                self._escribir(e, "err")
+            self.m = None
+            self._actualizar_botones()
+            return False
+        self.consola = tm_mod.ConsolaTM(self.m, None,
+                                        escribir=lambda s: self._escribir(s.rstrip("\n")),
+                                        texto_ci=texto_ci)
+        self._sync_flags()
+        self._escribir(f"Programa cargado: {nombre}  ({len(self.m.cargadas)} instrucciones)", "dim")
+        self._escribir("Simulador TM listo. Escriba h para ver la ayuda.")
+        self._actualizar_vistas()
+        self._actualizar_botones()
+        return True
+
+    def marcar_desactualizado(self, si=True):
+        if self.m is None or self._desactualizado == si:
+            return
+        self._desactualizado = si
+        if si:
+            self.detener(silencioso=True)
+            self._escribir("⚠ desactualizado — el fuente cambió: vuelve a compilar (F9)", "in")
+        self._actualizar_botones()
+
+    def _actualizar_botones(self):
+        hay = self.m is not None and not self._desactualizado
+        self.b_step.setEnabled(hay and not self._corriendo and not self._esperando)
+        self.b_reset.setEnabled(hay and not self._corriendo)
+        self.b_stop.setEnabled(self._corriendo or self._esperando)
+        self.b_run.setEnabled(not self._corriendo)
+
+    def _sync_flags(self):
+        if self.consola:
+            self.consola.traza = self.chk_traza.isChecked()
+            self.consola.contar = self.chk_contar.isChecked()
+
+    # ── ejecución no bloqueante ──
+    def ejecutar(self):
+        """Comando g desde el inicio (registros y memoria limpios)."""
+        if self.m is None:
+            return
+        self.m.reiniciar()
+        self._iniciar("g", 0)
+
+    def _iniciar(self, modo, pasos):
+        if self.m is None:
+            self._escribir("No hay programa cargado: presiona F9.", "err")
+            return
+        if self._desactualizado:
+            self._escribir("El código está desactualizado: presiona F9 para recompilar.", "err")
+            return
+        if self._corriendo or self._esperando:
+            return
+        self._modo = modo
+        self._pasos_rest = pasos
+        self._contador = 0
+        self._corriendo = True
+        self._actualizar_botones()
+        self.estado.emit("Ejecutando en la TM...")
+        self._timer.start(0)
+
+    def _tick(self):
+        if not self._corriendo or self.m is None:
+            return
+        tm, m = self.tm, self.m
+        E = tm.Estado
+        lote = self.LOTE_TRAZA if self.chk_traza.isChecked() else self.LOTE
+        for _ in range(lote):
+            if self._modo == "s" and self._pasos_rest <= 0:
+                self._fin(None)
+                return
+            if self.chk_traza.isChecked():
+                self._escribir(m.texto_instruccion(m.pc), "dim")
+            st = m.paso()
+            self._contador += 1
+            if self._modo == "s":
+                self._pasos_rest -= 1
+            if st == E.OKAY:
+                continue
+            if st == E.SALIDA:
+                self._escribir(f"Resultado del programa (OUT): {tm.fmt_valor(m.ultima_salida)}", "out")
+                continue
+            if st == E.NECESITA_ENTRADA:
+                self._pedir_entrada()
+                return
+            self._fin(st)
+            return
+        self._actualizar_vistas()
+        self._timer.start(0)
+
+    def _pedir_entrada(self):
+        self._corriendo = False
+        self._esperando = True
+        self._escribir("Ingrese un numero (IN):", "in")
+        self._lbl_ent.setText("Ingrese un numero (IN):")
+        self._refresh_styles()
+        self._actualizar_vistas()
+        self._actualizar_botones()
+        self.estado.emit("La TM espera una entrada (IN)")
+        self.entrada.setFocus()
+
+    def _fin(self, st):
+        self._corriendo = False
+        tm = self.tm
+        if st is None:                       # terminó el lote de 's'
+            self._escribir(tm.MENSAJE_ESTADO[tm.Estado.OKAY], "dim")
+            self.estado.emit(f"Paso ejecutado (pc = {self.m.pc})")
+        elif st == tm.Estado.HALT:
+            if self.chk_contar.isChecked() and self._modo == "g":
+                self._escribir(f"Number of instructions executed = {self._contador}", "dim")
+            self._escribir(tm.MENSAJE_ESTADO[st], "ok")
+            self.estado.emit(f"Ejecución finalizada (HALT), {self.m.pasos} instrucciones ejecutadas")
+        else:
+            loc = self.m.pc - 1
+            self._escribir(f"{tm.MENSAJE_ESTADO.get(st, st)}  (instrucción {loc})", "err")
+            self.estado.emit(f"Error en la TM: {tm.MENSAJE_ESTADO.get(st, st)}")
+        self._actualizar_vistas()
+        self._actualizar_botones()
+
+    def detener(self, silencioso=False):
+        estaba = self._corriendo or self._esperando
+        self._timer.stop()
+        self._corriendo = False
+        if self._esperando:
+            self._esperando = False
+            self._lbl_ent.setText("Comando TM (h=ayuda):")
+            self._refresh_styles()
+        if estaba and not silencioso:
+            self._escribir("Ejecución detenida por el usuario.", "err")
+            self.estado.emit("Ejecución detenida")
+            self._actualizar_vistas()
+        self._actualizar_botones()
+
+    def _reiniciar(self):
+        if self.m is None:
+            return
+        self.detener(silencioso=True)
+        self.consola.comando("c")
+        self._escribir("Registros y memoria reiniciados (c).", "dim")
+        self._actualizar_vistas()
+
+    def _enter(self):
+        txt = self.entrada.text()
+        self.entrada.clear()
+        if self._esperando:
+            self._escribir(txt, "in")
+            if not self.m.dar_entrada(txt):
+                self._escribir("Illegal value", "err")
+                self._escribir("Ingrese un numero (IN):", "in")
+                return
+            self._esperando = False
+            self._corriendo = True
+            self._lbl_ent.setText("Comando TM (h=ayuda):")
+            self._refresh_styles()
+            self._actualizar_botones()
+            self._timer.start(0)
+            return
+        cmd = txt.strip()
+        if not cmd:
+            return
+        self._escribir(f"Comando TM (h=ayuda): {cmd}", "dim")
+        if self.m is None:
+            self._escribir("No hay programa cargado: presiona F9.", "err")
+            return
+        letra = cmd[0]
+        if letra == "g":
+            self._iniciar("g", 0)
+        elif letra == "s":
+            partes = cmd.split()
+            try:
+                n = abs(int(partes[1])) if len(partes) > 1 else 1
+            except ValueError:
+                self._escribir("Step count?")
+                return
+            self._iniciar("s", n)
+        elif letra == "t":
+            self.chk_traza.setChecked(not self.chk_traza.isChecked())
+            self._escribir("Tracing now " + ("on." if self.chk_traza.isChecked() else "off."))
+        elif letra == "p":
+            self.chk_contar.setChecked(not self.chk_contar.isChecked())
+            self._escribir("Printing instruction count now " +
+                           ("on." if self.chk_contar.isChecked() else "off."))
+        elif letra == "q":
+            self.detener(silencioso=True)
+            self._escribir("Fin de la simulacion TM.")
+        else:
+            self.consola.comando(cmd)          # h v i d r c
+            self._actualizar_vistas()
+
+    # ── registros / memoria ──
+    def _actualizar_vistas(self):
+        if self.m is None:
+            return
+        tm, m = self.tm, self.m
+        for i in range(8):
+            datos = [str(i), tm.ALIAS_REG.get(i, ""), tm.fmt_operando(m.reg[i])]
+            for c, d in enumerate(datos):
+                it = QTableWidgetItem(d)
+                if c == 2:
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                if c == 1:
+                    it.setForeground(QColor(C['orange']))
+                self.t_reg.setItem(i, c, it)
+        sims = self._tabla_sim.simbolos() if self._tabla_sim else []
+        self.t_mem.setRowCount(len(sims))
+        for fila, s in enumerate(sims):
+            v = m.dMem[s.loc] if 0 <= s.loc < len(m.dMem) else "?"
+            datos = [s.nombre, str(s.loc), tm.fmt_valor(v) if v != "?" else v]
+            for c, d in enumerate(datos):
+                it = QTableWidgetItem(d)
+                if c == 0:
+                    it.setForeground(QColor(_TREE_NODE_COLOR["identificador"]))
+                if c == 2:
+                    it.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self.t_mem.setItem(fila, c, it)
+        self.pc_cambiado.emit(m.pc)
+        self._lbl.setText(f"pc = {m.pc}   ·   {m.pasos} pasos")
+
+
+# ══════════════════════════════════════════════════════
 #  VENTANA PRINCIPAL
 # ══════════════════════════════════════════════════════
 class IDEMainWindow(QMainWindow):
@@ -1104,6 +1815,8 @@ class IDEMainWindow(QMainWindow):
         self._editors: dict[str, CodeEditor] = {}
         # Archivo activo (None = sin titulo)
         self._active_path: str | None = None
+        # Editor cuyo código está mostrado en los paneles de código / TM
+        self._editor_compilado = None
 
         self._build_central()
         self._build_docks()
@@ -1136,6 +1849,8 @@ class IDEMainWindow(QMainWindow):
         editor.cursorPositionChanged.connect(self._update_cursor)
         editor.document().modificationChanged.connect(
             lambda mod, e=editor: self._on_modified(mod, e))
+        editor.document().contentsChanged.connect(
+            lambda e=editor: self._on_fuente_cambiado(e))
 
         label = os.path.basename(path) if path else "sin titulo"
         idx   = self.file_tabs.addTab(editor, label)
@@ -1156,8 +1871,20 @@ class IDEMainWindow(QMainWindow):
         w = self.file_tabs.currentWidget()
         return w if isinstance(w, CodeEditor) else None
 
+    def _on_fuente_cambiado(self, editor):
+        """Regla: nunca mostrar como válido código de un fuente que cambió."""
+        if editor is self._editor_compilado:
+            self._marcar_desactualizado(True)
+
+    def _marcar_desactualizado(self, si):
+        self.out_ci.marcar_desactualizado(si)
+        self.out_exec.marcar_desactualizado(si)
+
     def _on_tab_changed(self, idx):
         self._update_cursor()
+        if getattr(self, "_editor_compilado", None) is not None:
+            self._marcar_desactualizado(
+                self.file_tabs.widget(idx) is not self._editor_compilado)
         e = self.file_tabs.widget(idx)
         if e and hasattr(e, '_file_path'):
             name = (os.path.basename(e._file_path)
@@ -1202,11 +1929,11 @@ class IDEMainWindow(QMainWindow):
         self.out_lexico = TokenPanel()          # ← panel visual
         self.out_sint   = SyntaxTreePanel()     # ← árbol sintáctico
         self.out_sem    = SemanticPanel()       # ← árbol anotado / recorrido
-        self.out_ci     = make_output("fg",  "bg")
+        self.out_ci     = CodigoPanel()         # ← .tm (tabla/archivo) y .ci
         self.nb_results.addTab(self.out_lexico, "Lexico")
         self.nb_results.addTab(self.out_sint,   "Sintactico")
         self.nb_results.addTab(self.out_sem,    "Semantico")
-        self.nb_results.addTab(self.out_ci,     "Cod. Intermedio")
+        self.nb_results.addTab(self.out_ci,     "Código Intermedio")
  
 
         self.symbol_table = QTableWidget(0, 6)
@@ -1229,11 +1956,14 @@ class IDEMainWindow(QMainWindow):
         self.err_lexico = make_output("red", "bg")
         self.err_sint   = make_output("red", "bg")
         self.err_sem    = make_output("red", "bg")
-        self.out_exec   = make_output("green", "terminal_bg")
+        self.out_exec   = TMPanel()             # ← simulador TM integrado
+        self.out_exec.ejecutar_pedido.connect(self._ejecutar)
+        self.out_exec.pc_cambiado.connect(self.out_ci.resaltar_pc)
+        self.out_exec.estado.connect(self.lbl_status_set)
         self.nb_errors.addTab(self.err_lexico, "Errores Lexicos")
         self.nb_errors.addTab(self.err_sint,   "Errores Sintacticos")
         self.nb_errors.addTab(self.err_sem,    "Errores Semanticos")
-        self.nb_errors.addTab(self.out_exec,   "Resultado Ejecucion")
+        self.nb_errors.addTab(self.out_exec,   "Máquina TM (ejecución)")
 
         self.dock_errors = self._make_dock("ERRORES / SALIDA",
                                            self.nb_errors, BOTTOM)
@@ -1241,7 +1971,7 @@ class IDEMainWindow(QMainWindow):
         # Tamaños iniciales
         self.resizeDocks([self.dock_explorer], [200], Qt.Orientation.Horizontal)
         self.resizeDocks([self.dock_results],  [380], Qt.Orientation.Horizontal)
-        self.resizeDocks([self.dock_errors],   [180], Qt.Orientation.Vertical)
+        self.resizeDocks([self.dock_errors],   [260], Qt.Orientation.Vertical)
  
         
         self.dock_results.setMinimumWidth(80)
@@ -1388,8 +2118,9 @@ class IDEMainWindow(QMainWindow):
         self.out_lexico.refresh_theme()
         self.out_sint.refresh_theme()           # árbol sintáctico
         self.out_sem.refresh_theme()            # panel semántico
-        for w in (self.out_ci, self.out_exec,
-                  self.err_lexico, self.err_sint, self.err_sem):
+        self.out_ci.refresh_theme()             # código intermedio
+        self.out_exec.refresh_theme()           # máquina TM
+        for w in (self.err_lexico, self.err_sint, self.err_sem):
             _apply_output_style(w)
  
 
@@ -1414,6 +2145,10 @@ class IDEMainWindow(QMainWindow):
             c = self.editor.textCursor()
             self.lbl_pos.setText(
                 f"Ln {c.blockNumber()+1},  Col {c.columnNumber()+1}")
+
+    def lbl_status_set(self, texto):
+        if hasattr(self, "lbl_status"):
+            self.lbl_status.setText(texto)
 
     def _set_output(self, widget, text):
         widget.setPlainText(text or "(sin salida)")
@@ -1630,16 +2365,7 @@ class IDEMainWindow(QMainWindow):
         return tmp.name, True
 
     def _load_compilador(self):
-        """Importa compilador.py como módulo desde su ruta real."""
-        import importlib.util, sys
-        compiler_path = resource_path("compilador.py")
-        if not os.path.isfile(compiler_path):
-            return None, f"[Error] No se encontró 'compilador.py' en:\n{os.path.dirname(compiler_path)}"
-        sys.modules.pop("compilador", None)
-        spec = importlib.util.spec_from_file_location("compilador", compiler_path)
-        mod  = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return mod, None
+        return cargar_compilador()
 
     def _run_compiler(self, flag):
         path, is_tmp = self._get_source_path()
@@ -1832,24 +2558,119 @@ class IDEMainWindow(QMainWindow):
                     it.setForeground(QColor(_TREE_NODE_COLOR["declaracion"]))
                 t.setItem(fila, c, it)
 
+    # ── Generación de código y ejecución ─────────────────────
+    def _compilar_todo(self):
+        """Guarda y compila TODAS las fases del fuente actual. Actualiza
+        árbol, semántico, tabla de símbolos, errores y el panel de código.
+        Devuelve (resultado, módulo) o (None, None)."""
+        self.out_exec.detener(silencioso=True)
+        e = self.editor
+        if not e:
+            return None, None
+        path, is_tmp = self._get_source_path()
+        if not path:
+            return None, None
+        mod, err_msg = self._load_compilador()
+        if err_msg:
+            self.out_ci.limpiar(err_msg, error=True)
+            return None, None
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                codigo = f.read()
+            r = mod.compilar(codigo, None if is_tmp else path)
+        except Exception as ex:
+            import traceback
+            self.out_ci.limpiar(f"Error interno: {ex}", error=True)
+            self._set_errors(self.err_sem, traceback.format_exc())
+            return None, None
+        finally:
+            if is_tmp:
+                try:
+                    os.unlink(path)
+                except Exception:
+                    pass
+
+        nombre = os.path.basename(path) if not is_tmp else "sin titulo"
+        # Árbol / semántico / tabla de símbolos / errores de cada fase
+        self._set_errors(self.err_lexico, mod.formatear_errores(r.errores_lex)
+                         if r.errores_lex else "")
+        partes = []
+        if r.errores_lex:
+            partes.append(mod.formatear_errores(r.errores_lex))
+        if r.errores_sint:
+            partes.append(mod.formatear_errores_sint(r.errores_sint))
+        self._set_errors(self.err_sint, "\n".join(partes))
+        if r.arbol is not None:
+            self.out_sint.cargar_arbol(r.arbol, r.errores_lex + r.errores_sint)
+        if r.ejecutado:
+            self.out_sem.cargar(r, mod)
+            self._llenar_tabla_simbolos(r.tabla, mod)
+            texto_sem = mod.formatear_errores_sem(r.errores_sem)
+            if r.error_gen:
+                texto_sem = (texto_sem + "\n" if texto_sem else "") + r.error_gen
+            self._set_errors(self.err_sem, texto_sem)
+            if not texto_sem and r.avisos:
+                self.err_sem.setPlainText(
+                    "(sin errores)\n\nAvisos (no impiden generar código):\n" +
+                    "\n".join(f"[AVISO] Línea {l}: {m}" for l, m in r.avisos))
+                self.err_sem.setStyleSheet(
+                    f"background:{C['bg']}; color:{C['orange']}; border:none;"
+                    f"font-family:Consolas; font-size:10pt;")
+        else:
+            self.out_sem.mostrar_error("Hay errores léxicos/sintácticos")
+            self._llenar_tabla_simbolos(None, mod)
+            self._set_errors(self.err_sem, "No se ejecutó el análisis semántico: "
+                             "corrige primero los errores léxicos/sintácticos.")
+        if e:
+            e.set_error_lines(r.errores_lex + r.errores_sint + r.errores_sem)
+
+        self._editor_compilado = e
+        if r.ok:
+            self.out_ci.cargar(r, nombre)
+            self._marcar_desactualizado(False)
+        else:
+            self.out_ci.limpiar(f"No se generó código: hay {r.n_errores or 1} "
+                                f"error(es) — {nombre}", error=True)
+            self.out_exec.limpiar("No se generó código: hay errores de análisis. "
+                                  "Corrígelos y vuelve a compilar.")
+            if r.errores_lex:
+                w = self.err_lexico
+            elif r.errores_sint:
+                w = self.err_sint
+            else:
+                w = self.err_sem
+            self.nb_errors.setCurrentWidget(w)
+            self.dock_errors.show(); self.dock_errors.raise_()
+        return r, mod
+
     def _codigo_intermedio(self):
-        self.lbl_status.setText("Generando codigo intermedio...")
+        self.lbl_status.setText("Compilando y generando código...")
         QApplication.processEvents()
-        out, err = self._run_compiler("intermedio")
-        self._set_output(self.out_ci, out)
+        r, mod = self._compilar_todo()
         self.nb_results.setCurrentWidget(self.out_ci)
         self.dock_results.show(); self.dock_results.raise_()
-        self.lbl_status.setText("Codigo intermedio generado")
+        if r is not None and r.ok:
+            self.lbl_status.setText(f"Código generado: {len(r.instrucciones)} instrucciones")
+        else:
+            self.lbl_status.setText("No se generó código (hay errores)")
 
     def _ejecutar(self):
-        self.lbl_status.setText("Ejecutando programa...")
+        """F9: recompila SIEMPRE el fuente actual y ejecuta en la TM el texto
+        del .tm recién generado (nunca reutiliza un .tm anterior)."""
+        self.lbl_status.setText("Compilando...")
         QApplication.processEvents()
-        out, err = self._run_compiler("ejecutar")
-        combined = (out or "") + ("\n\n--- Errores ---\n" + err if err else "")
-        self._set_output(self.out_exec, combined)
+        r, mod = self._compilar_todo()
+        self.nb_results.setCurrentWidget(self.out_ci)
+        self.dock_results.show(); self.dock_results.raise_()
+        if r is None or not r.ok:
+            self.lbl_status.setText("No se ejecutó: hay errores de análisis")
+            return
+        import tm as tm_mod
+        nombre = self.out_ci._fuente
         self.nb_errors.setCurrentWidget(self.out_exec)
         self.dock_errors.show(); self.dock_errors.raise_()
-        self.lbl_status.setText("Ejecucion finalizada")
+        if self.out_exec.cargar_programa(tm_mod, r.codigo_tm, r.tabla, r.codigo_ci, nombre):
+            self.out_exec.ejecutar()
     
     def _toggle_results(self, checked):
         """Muestra u oculta el panel de resultados del compilador."""
@@ -1870,6 +2691,9 @@ class IDEMainWindow(QMainWindow):
 
 # ══════════════════════════════════════════════════════
 if __name__ == "__main__":
+    if len(sys.argv) >= 4 and sys.argv[1] == "--autoprueba":
+        autoprueba(sys.argv[2], sys.argv[3], sys.argv[4:])
+        sys.exit(0)
     app = QApplication(sys.argv)
     app.setStyleSheet(build_stylesheet(C))
     win = IDEMainWindow()
