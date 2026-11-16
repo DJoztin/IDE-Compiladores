@@ -22,7 +22,10 @@ ide_compilador.py  ──importa como módulo──►  compilador.py
 
 | Archivo | Rol | Estado |
 |---|---|---|
-| `compilador.py` | **Motor del compilador** (léxico + sintáctico + semántico). | Léxico ✅ · Sintáctico ✅ · Semántico ✅ · resto ❌ |
+| `compilador.py` | **Motor del compilador** (léxico + sintáctico + semántico) y `compilar()` (orquesta la generación). | ✅ |
+| `code_tm.py`, `cgen.py`, `intermedio.py`, `tm.py` | Generación de código TM y `.ci`, y la máquina TM (port de `code.c`, `cgen.c`, `intermedio.c`, `tm.c`). Ver §12. | ✅ |
+| `pruebas/` | `run_tests.py`, oráculo `interprete_ast.py`, programas de ejercicios. | ✅ |
+| `docs/` | Correspondencia con TINY, guion de revisión, lo no soportado. | ✅ |
 | `ide_compilador.py` | **IDE / GUI** (PyQt6): editor, pestañas, docks, temas. 1409 líneas. | ✅ |
 | `highlighter.py` | Resaltado de sintaxis del editor (`LexicoHighlighter`). | ✅ |
 | `token_panel.py` | Panel visual de tokens con filtros por tipo (`TokenPanel`). | ✅ |
@@ -119,10 +122,10 @@ Interfaz en PyQt6. Componentes principales:
 | **1. Léxico** | ✅ Implementado | `analizar()` |
 | **2. Sintáctico** | ✅ Implementado | `AnalizadorSintactico` |
 | **3. Semántico** | ✅ Implementado (ver §11) | `analizar_semantico()` · F7 |
-| **4. Código intermedio** | ❌ Pendiente | — (F8) |
-| **5. Ejecución** | ❌ Pendiente | — (F9) |
+| **4. Código intermedio** (.tm y .ci) | ✅ Implementado (ver §12) | `compilar()` · F8 |
+| **5. Ejecución en la TM** | ✅ Implementado (ver §12) | `tm.py` · F9 |
 
-El IDE ya tiene los botones/atajos y paneles (Semántico, Cod. Intermedio, Tabla de Símbolos, Resultado Ejecución) pero el backend de esas fases todavía no existe en `compilador.py` (el `main()` solo reconoce `--lexico` y `--sintactico`).
+Todas las fases tienen backend y panel en el IDE (ver §12).
 
 ---
 
@@ -246,3 +249,43 @@ Formato: `[ERROR SEMÁNTICO] Línea X, Columna Y: [categoría] mensaje`
 - *Tabla de Símbolos*: Nombre, Tipo, Loc, Valor, Ámbito, Líneas.
 - Árboles con ramas dibujadas (├── └── │), colapsables, exportables a .txt.
 - Archivos de prueba: `TestSemantica_adaptado.txt` (el test oficial en nuestra sintaxis, mismas líneas; 7 errores) y `TestSemantica_casos_extra.txt` (cubre las 7 categorías + división entre cero y variable sin valor; 13 errores).
+
+---
+
+## 12. Fase final — Generación de código TM y ejecución (IMPLEMENTADO)
+
+**Rama:** `fase-final`. Documentos: `docs/CORRESPONDENCIA_TINY.md` (tabla nodo ↔ TINY ↔ TM, extensión de reales), `docs/GUION_REVISION.md` (pasos para la revisión), `docs/NO_SOPORTADO.md`.
+
+### Ajuste al semántico (Fase 0)
+Tres estados por variable: *nunca asignada*, *posiblemente asignada*, *asignada*. Sólo es **error** usar una variable que nunca se asignó antes (`=`, `cin` o `++/--` válido). Si se asignó sólo en una rama de un `if` o dentro de un ciclo, su uso genera un **AVISO** (bitácora y `ResultadoSemantico.avisos`), no bloquea la generación, y la tabla muestra `?`. Al entrar a un ciclo, lo que se asigna con `=`/`cin` en su cuerpo pasa a *posiblemente asignada*. `TestSemantica_casos_extra.txt` sigue dando 13 errores y la copia limpia del test adaptado (`pruebas/datos/`) 7.
+
+### Extensión del lenguaje (Fase 2)
+```
+termino  → potencia (('*'|'/'|'%') potencia)*
+potencia → factor ('^' potencia)?          (asociativa a la derecha)
+```
+`%`: sólo `int % int → int` (como C). `^`: base int/float, exponente int, tipo = el de la base; exponente ≤ 0 → 1. Nodo nuevo `potencia`. En TM se generan sin opcodes nuevos (temporales en `mp`).
+
+### Módulos (espejo de TINY)
+| Módulo | Equivale a | Interfaz |
+|---|---|---|
+| `code_tm.py` | `code.c` | `EmisorTM`: `emit_ro/rm/skip/backup/restore/rm_abs`, `texto()`, `instrucciones_ordenadas()` |
+| `cgen.py` | `cgen.c` | `generar_codigo_tm(arbol_anotado, tabla, nombre) -> EmisorTM` |
+| `intermedio.py` | `intermedio.c` | `generar_codigo_intermedio(arbol_anotado) -> str` |
+| `tm.py` | `tm.c` | `MaquinaTM` (`cargar`, `paso`, `dar_entrada`, `reiniciar`, `ejecutar`), `ConsolaTM`, `python tm.py prog.tm` |
+| `compilador.py` | `main.c` | `compilar(codigo, ruta_fuente=None) -> ResultadoCompilacion` (`ok`, `codigo_tm`, `instrucciones`, `codigo_ci`, `ruta_tm`, `ruta_ci`) |
+
+- `.tm` y `.ci` se generan en paralelo desde el árbol anotado, junto al fuente (`prog.txt` → `prog.tm`, `prog.ci`). Con errores en cualquier fase no se genera nada y se **borran** los `.tm`/`.ci` viejos.
+- TM con reales (única extensión): registros y memoria int/float, `LDC` real, `IN` acepta reales, `DIV` entera (trunca hacia cero) si ambos son int. Conversión int→float con `LDC ac1,1.0(0)` + `MUL ac,ac,ac1` donde el árbol marca `conv` y tras `IN` a float.
+- CLI: `python compilador.py --intermedio prog.txt` · `python compilador.py --ejecutar prog.txt [--directo]` (con `--directo` ejecuta `g` leyendo las entradas de stdin).
+
+### IDE
+- Pestaña **Código Intermedio** (`CodigoPanel`): sub-pestaña *Código TM (.tm)* con vista Tabla (Dir · Instrucción · Operandos · Comentario, colores por tipo) o Archivo (texto en orden de emisión); sub-pestaña *Código intermedio de tres direcciones (.ci)*; botones Guardar .tm / Guardar .ci / Copiar.
+- Pestaña **Máquina TM (ejecución)** (`TMPanel`): consola con el diálogo de `tm.exe`, línea de entrada para `IN` y para comandos `h v i d r s g t p c q`, botones Ejecutar/Paso/Reiniciar/Detener, Rastreo y Contar; registros y memoria de variables. Ejecuta por lotes con `QTimer` (no congela la UI); límite de 20 000 000 pasos.
+- **F8** compila todas las fases y llena árbol, semántico, tabla y código. **F9** siempre recompila y carga en la TM el texto del `.tm` recién generado.
+- Editar el fuente o cambiar de pestaña marca los paneles como `⚠ desactualizado` y deshabilita Paso/Reiniciar.
+- `Ide.exe --autoprueba prog.txt salida.txt [entradas...]` compila y ejecuta sin ventana (para comprobar el `.exe`).
+- `IDE.spec` incluye `code_tm.py`, `cgen.py`, `intermedio.py` y `tm.py` en `datas`.
+
+### Pruebas
+`python pruebas/run_tests.py` (sin dependencias): oro contra TINY (factorial, aritmética, condicional, ciclo: mismo `.tm` y `.ci`), la TM ejecuta los `.tm` de la docente, ~40 casos por construcción (TM == oráculo `interprete_ast.py` == esperado), errores (sin `.tm`, división entre cero, ciclo infinito) y 30 programas de ejercicios en `pruebas/programas/` (`.txt`, `.in`, `.esperado`).

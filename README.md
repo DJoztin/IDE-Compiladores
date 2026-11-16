@@ -1,5 +1,5 @@
 # IDE Compiladores — UAA
-### Proyecto de Compiladores 1 · Fase 1
+### Proyecto de Compiladores II · Fase final (generación de código TM y ejecución)
 ---
 
 ## Archivos del proyecto
@@ -7,7 +7,10 @@
 | Archivo | Descripción |
 |---|---|
 | `ide_compilador.py` | **IDE** — interfaz gráfica (PyQt6) |
-| `compilador.py` | **Compilador externo** — módulo autónomo (stub, reemplazar con implementación real) |
+| `compilador.py` | **Compilador** — léxico, sintáctico, semántico y `compilar()` |
+| `code_tm.py` · `cgen.py` · `intermedio.py` · `tm.py` | Generación del `.tm` y del `.ci`, y la máquina TM (port de TINY de Louden) |
+| `pruebas/run_tests.py` | Pruebas automáticas (`python pruebas/run_tests.py`) |
+| `docs/` | Correspondencia con TINY, guion de revisión, lo no soportado |
 | `README.md` | Este archivo |
 
 ---
@@ -35,9 +38,20 @@ python ide_compilador.py
 python compilador.py --lexico      archivo.txt
 python compilador.py --sintactico  archivo.txt
 python compilador.py --semantico   archivo.txt
-python compilador.py --intermedio  archivo.txt
-python compilador.py --ejecutar    archivo.txt
+python compilador.py --intermedio  archivo.txt   # escribe archivo.tm y archivo.ci
+python compilador.py --ejecutar    archivo.txt   # compila y abre la consola de la TM
+python compilador.py --ejecutar    archivo.txt --directo < entradas.txt
+python tm.py archivo.tm                          # sólo la máquina TM
 ```
+
+### Fases
+| Fase | Estado | IDE |
+|---|---|---|
+| Léxico | ✅ | F5 |
+| Sintáctico | ✅ | F6 |
+| Semántico | ✅ | F7 |
+| Código TM (.tm) y de tres direcciones (.ci) | ✅ | F8 |
+| Ejecución en la máquina TM | ✅ | F9 |
 
 ---
 
@@ -98,7 +112,7 @@ ide_compilador.py              compilador.py
 | Lexico | Lista de tokens generados |
 | Sintactico | Árbol sintáctico / salida estructurada |
 | Semantico | Validaciones y verificación de tipos |
-| Cod. Intermedio | Código de tres direcciones |
+| Código Intermedio | Código TM (.tm) en tabla o archivo, y código de tres direcciones (.ci) |
 | Tabla de Simbolos | Nombre, Tipo, Valor, Línea, Alcance |
 
 ### Panel de errores / salida *(dock arrastrable — abajo)*
@@ -107,7 +121,7 @@ ide_compilador.py              compilador.py
 | Errores Lexicos | Errores con número de línea y columna |
 | Errores Sintacticos | Errores con número de línea y descripción |
 | Errores Semanticos | Errores con número de línea y descripción |
-| Resultado Ejecucion | Salida del programa compilado |
+| Máquina TM (ejecución) | Consola de la TM (IN/OUT y comandos), registros y memoria de variables |
 
 > Cuando una fase produce errores, el IDE cambia automáticamente al tab de errores correspondiente.
 > Cuando no hay errores, muestra `(sin errores)` en verde.
@@ -143,31 +157,6 @@ El cambio de tema es instantáneo y actualiza todos los paneles.
 
 ---
 
-## Cómo conectar el compilador real
-
-El archivo `compilador.py` contiene funciones stub para cada fase. Reemplaza su contenido con tu implementación real. Cada fase debe escribir resultados a `stdout` y errores a `stderr`:
-
-```python
-# Ejemplo de estructura esperada por el IDE
-import sys
-
-def analisis_lexico(ruta):
-    # ... tu analizador léxico ...
-    print("TOKEN  ID        'main'   Ln 1")   # stdout → panel Lexico
-    # Si hay errores:
-    print("[Error Lexico] Linea 3, Col 7: caracter no reconocido '@'",
-          file=sys.stderr)                     # stderr → panel Errores Lexicos
-```
-
-### Formato de errores recomendado
-```
-[Error Lexico]     Linea X, Col Y: descripción
-[Error Sintactico] Linea X: descripción
-[Error Semantico]  Linea X: descripción
-```
-
----
-
 ## Atajos de teclado — resumen
 
 | Atajo | Acción |
@@ -183,6 +172,6 @@ def analisis_lexico(ruta):
 | F5 | Análisis Léxico |
 | F6 | Análisis Sintáctico |
 | F7 | Análisis Semántico |
-| F8 | Código Intermedio |
-| F9 | Ejecutar |
+| F8 | Compilar todo y mostrar el código (.tm y .ci) |
+| F9 | Recompilar y ejecutar en la TM |
 | Alt+F4 | Salir |
