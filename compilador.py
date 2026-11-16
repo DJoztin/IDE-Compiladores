@@ -2,13 +2,25 @@
 # -*- coding: utf-8 -*-
 """
 Compilador — CompiladorIDE UAA
-Fases: léxico (DFA), sintáctico (descenso recursivo) y semántico.
+Fases: léxico (DFA), sintáctico (descenso recursivo), semántico y
+generación de código (TM + intermedio de tres direcciones).
 
 Uso:  python compilador.py --lexico|--sintactico|--semantico <archivo>
+      python compilador.py --intermedio <archivo>      (genera .tm y .ci)
+      python compilador.py --ejecutar <archivo> [--directo]
+
+Correspondencia con TINY (main.c): la función compilar() hace lo mismo que
+main.c: analiza, y sólo si no hay errores llama a codeGen (cgen.py) y al
+generador de intermedio (intermedio.py).
 """
 
 import sys
 import os
+
+# Los módulos de generación viven junto a este archivo (también en el .exe)
+_DIR = os.path.dirname(os.path.abspath(__file__))
+if _DIR not in sys.path:
+    sys.path.insert(0, _DIR)
 
 # ═══════════════════════════════════════════════════════════════
 #  TOKENS
@@ -406,7 +418,8 @@ class AnalizadorSintactico:
       condicion      → expr_rel (('&&'|'||') expr_rel)*
       expr_rel       → expresion (OP_REL expresion)?
       expresion      → termino (('+' | '-') termino)*
-      termino        → factor (('*' | '/') factor)*
+      termino        → potencia (('*' | '/' | '%') potencia)*
+      potencia       → factor ('^' potencia)?      (asociativa a la derecha)
       factor         → '(' expresion ')' | ENTERO | REAL | 'true' | 'false'
                      | ID | '-' factor
     """
@@ -682,16 +695,27 @@ class AnalizadorSintactico:
         return left
 
     def _termino(self) -> NodoSint:
-        # El operador * / / es la raíz; operandos son hijos izq/der
-        left = self._factor()
-        while self._espera(TK_OP_ARIT) and self._tok().valor in ('*', '/'):
+        # El operador * / % es la raíz; operandos son hijos izq/der
+        left = self._potencia()
+        while self._espera(TK_OP_ARIT) and self._tok().valor in ('*', '/', '%'):
             t = self._consumir(TK_OP_ARIT)
-            right = self._factor()
+            right = self._potencia()
             node = NodoSint("termino", t.valor, t.linea, t.columna)
             node.agregar(left)
             node.agregar(right)
             left = node
         return left
+
+    def _potencia(self) -> NodoSint:
+        # base ^ exponente, asociativa a la derecha: 2^3^2 = 2^(3^2)
+        base = self._factor()
+        if self._espera(TK_OP_ARIT) and self._tok().valor == '^':
+            t = self._consumir(TK_OP_ARIT)
+            node = NodoSint("potencia", "^", t.linea, t.columna)
+            node.agregar(base)
+            node.agregar(self._potencia())
+            return node
+        return base
 
     def _factor(self) -> NodoSint:
         t = self._tok()
@@ -1302,7 +1326,37 @@ class AnalizadorSemantico:
             return t, (-v if v is not DESCONOCIDO else DESCONOCIDO)
         if k in ("expresion", "termino", "expr_rel", "condicion"):
             return self._binaria(n)
+        if k == "potencia":
+            return self._potencia(n)
         return T_ERROR, DESCONOCIDO               # nodo 'error' del sintáctico
+
+    def _potencia(self, n):
+        """base ^ exponente: base int|float, exponente int.
+        El tipo resultante es el de la base. Exponente <= 0 → 1."""
+        izq, der = (n.hijos + [None, None])[:2]
+        tb, vb = self._expr(izq)
+        te, ve = self._expr(der)
+        if T_ERROR in (tb, te):
+            return T_ERROR, DESCONOCIDO
+        if tb not in NUMERICOS:
+            self._error(f"El operador '^' no se puede aplicar a una base {tb}",
+                        n, ERR_OPERADOR)
+            return T_ERROR, DESCONOCIDO
+        if te != T_INT:
+            self._error(f"El exponente de '^' debe ser int, se obtuvo {te}",
+                        n, ERR_OPERADOR)
+            return T_ERROR, DESCONOCIDO
+        v = DESCONOCIDO
+        if vb is not DESCONOCIDO and ve is not DESCONOCIDO:
+            try:
+                v = vb ** ve if ve > 0 else 1
+                v = float(v) if tb == T_FLOAT else v
+            except OverflowError:
+                v = DESCONOCIDO
+        self._log(n.linea, "TIPO",
+                  f"{_desc(n)} : {tb} ^ int → {tb}"
+                  + (f"  (valor {fmt_valor(v)})" if v is not DESCONOCIDO else ""))
+        return tb, v
 
     def _binaria(self, n):
         op = n.valor
@@ -1312,6 +1366,27 @@ class AnalizadorSemantico:
         if T_ERROR in (ti, td):                    # no se encadenan errores
             return T_ERROR, DESCONOCIDO
         conocidos = vi is not DESCONOCIDO and vd is not DESCONOCIDO
+
+        # ── módulo: sólo enteros ──
+        if op == "%":
+            if ti != T_INT or td != T_INT:
+                malo = ti if ti != T_INT else td
+                self._error(f"El operador '%' requiere operandos int, "
+                            f"se encontró {malo}", n, ERR_OPERADOR)
+                return T_ERROR, DESCONOCIDO
+            if vd is not DESCONOCIDO and vd == 0:
+                self._error("División entre cero (módulo)", n, ERR_DIV_CERO)
+                return T_ERROR, DESCONOCIDO
+            v = DESCONOCIDO
+            if conocidos:
+                # como en C / en la TM: a - (a/b)*b con división truncada
+                q = abs(vi) // abs(vd)
+                q = q if (vi >= 0) == (vd >= 0) else -q
+                v = vi - q * vd
+            self._log(n.linea, "TIPO",
+                      f"{_desc(n)} : int % int → int"
+                      + (f"  (valor {fmt_valor(v)})" if v is not DESCONOCIDO else ""))
+            return T_INT, v
 
         # ── aritméticos ──
         if op in ("+", "-", "*", "/"):
@@ -1535,19 +1610,103 @@ def analizar_semantico(codigo: str) -> ResultadoSemantico:
 
 
 # ═══════════════════════════════════════════════════════════════
+#  GENERACIÓN DE CÓDIGO  (equivalente a main.c de TINY)
+# ═══════════════════════════════════════════════════════════════
+class ResultadoCompilacion(ResultadoSemantico):
+    def __init__(self):
+        super().__init__()
+        self.ok            = False   # True sólo si no hubo errores en ninguna fase
+        self.codigo_tm     = ""      # texto del .tm (orden de emisión)
+        self.instrucciones = []      # (loc, op, a1, a2, a3, comentario) por dirección
+        self.codigo_ci     = ""
+        self.ruta_tm       = None
+        self.ruta_ci       = None
+        self.error_gen     = ""      # error interno del generador, si lo hubo
+        self.mensajes      = []      # mensajes estilo TINY
+
+    @property
+    def n_errores(self):
+        return len(self.errores_lex) + len(self.errores_sint) + len(self.errores_sem)
+
+
+def rutas_salida(ruta_fuente):
+    base = os.path.splitext(ruta_fuente)[0]
+    return base + ".tm", base + ".ci"
+
+
+def compilar(codigo: str, ruta_fuente: str | None = None,
+             escribir: bool = True) -> ResultadoCompilacion:
+    """Léxico → sintáctico → semántico → (.tm y .ci en paralelo).
+    Si hay errores en cualquier fase no se genera código y se borran los
+    .tm/.ci viejos del mismo nombre, para no mostrar una salida vieja."""
+    import cgen
+    import intermedio
+
+    r = ResultadoCompilacion()
+    sem = analizar_semantico(codigo)
+    r.__dict__.update({k: v for k, v in sem.__dict__.items()})
+    nombre_tm = (os.path.basename(rutas_salida(ruta_fuente)[0])
+                 if ruta_fuente else "programa.tm")
+
+    if not r.ejecutado or r.errores_sem:
+        r.mensajes.append("Compilacion cancelada por errores de analisis.")
+    else:
+        try:
+            emisor = cgen.generar_codigo_tm(r.anotado, r.tabla, nombre_tm)
+            r.codigo_tm = emisor.texto()
+            r.instrucciones = emisor.instrucciones_ordenadas()
+            r.codigo_ci = intermedio.generar_codigo_intermedio(r.anotado)
+            r.ok = True
+        except Exception as ex:          # error interno: no se genera nada
+            r.error_gen = f"Error interno del generador: {ex}"
+            r.mensajes.append(r.error_gen)
+            r.codigo_tm, r.instrucciones, r.codigo_ci = "", [], ""
+
+    if ruta_fuente and escribir:
+        ruta_tm, ruta_ci = rutas_salida(ruta_fuente)
+        if r.ok:
+            with open(ruta_ci, "w", encoding="utf-8") as f:
+                f.write(r.codigo_ci)
+            with open(ruta_tm, "w", encoding="utf-8") as f:
+                f.write(r.codigo_tm)
+            r.ruta_tm, r.ruta_ci = ruta_tm, ruta_ci
+            r.mensajes.append(f"Codigo intermedio generado: {ruta_ci}")
+            r.mensajes.append(f"Codigo TM generado: {ruta_tm}")
+        else:
+            for viejo in (ruta_tm, ruta_ci):
+                try:
+                    if os.path.isfile(viejo):
+                        os.remove(viejo)
+                except OSError:
+                    pass
+    return r
+
+
+def _imprimir_errores(r):
+    if r.errores_lex:
+        print(formatear_errores(r.errores_lex), file=sys.stderr)
+    if r.errores_sint:
+        print(formatear_errores_sint(r.errores_sint), file=sys.stderr)
+    if r.errores_sem:
+        print(formatear_errores_sem(r.errores_sem), file=sys.stderr)
+
+
+# ═══════════════════════════════════════════════════════════════
 #  PUNTO DE ENTRADA
 # ═══════════════════════════════════════════════════════════════
 def main():
     args = sys.argv[1:]
 
     flag = None
-    for f in ("--lexico", "--sintactico", "--semantico"):
+    for f in ("--lexico", "--sintactico", "--semantico",
+              "--intermedio", "--ejecutar"):
         if f in args:
             flag = f
             break
 
     if flag is None:
-        print("Uso: python compilador.py --lexico|--sintactico|--semantico <archivo>",
+        print("Uso: python compilador.py --lexico|--sintactico|--semantico|"
+              "--intermedio|--ejecutar <archivo> [--directo]",
               file=sys.stderr)
         sys.exit(1)
 
@@ -1605,6 +1764,24 @@ def main():
             print(formatear_bitacora(r.bitacora))
             if r.errores_sem:
                 print(formatear_errores_sem(r.errores_sem), file=sys.stderr)
+
+    elif flag in ("--intermedio", "--ejecutar"):
+        r = compilar(codigo, ruta)
+        for m in r.mensajes:
+            print(m)
+        if not r.ok:
+            _imprimir_errores(r)
+            sys.exit(2)
+        if flag == "--intermedio":
+            print("\n======= CODIGO INTERMEDIO DE TRES DIRECCIONES (.ci) =======")
+            print(r.codigo_ci, end="")
+            print("\n======= CODIGO TM (.tm) =======")
+            print(r.codigo_tm, end="")
+        else:
+            import tm
+            iniciales = ("g",) if "--directo" in args else ()
+            sys.exit(tm.repl(r.ruta_tm, r.codigo_tm, r.codigo_ci,
+                             comandos_iniciales=iniciales))
 
 
 if __name__ == "__main__":
