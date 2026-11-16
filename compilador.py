@@ -797,9 +797,11 @@ def fmt_valor(v):
 
 
 def valor_simbolo(sim) -> str:
-    """Valor para la tabla: distingue 'sin asignar' de 'desconocido'."""
+    """Valor para la tabla: distingue 'sin asignar' de 'desconocido'.
+    Una variable *posiblemente asignada* (en una rama o dentro de un ciclo)
+    se muestra como '?'."""
     if not sim.inicializada:
-        return "sin asignar"
+        return "?" if sim.alguna_vez else "sin asignar"
     return fmt_valor(sim.valor)
 
 
@@ -832,7 +834,12 @@ class Simbolo:
         self.columna    = columna
         self.lineas     = [linea]                 # todas las líneas donde aparece
         self.valor      = DESCONOCIDO             # último valor conocido
-        self.inicializada = False                 # ¿ya recibió un valor?
+        self.inicializada = False                 # ¿asignada en TODO camino?
+        # ¿asignada en ALGÚN camino anterior? (rama de un if, cuerpo de un
+        # ciclo...). Nunca vuelve a False. Si inicializada es False pero
+        # alguna_vez es True, la variable está *posiblemente asignada*:
+        # su uso produce un AVISO, no un error.
+        self.alguna_vez   = False
 
 
 class TablaSimbolos:
@@ -915,8 +922,17 @@ class AnalizadorSemantico:
         self.tabla    = TablaSimbolos()
         self.errores: list[ErrorSemantico] = []
         self.bitacora: list[tuple] = []          # (linea, accion, detalle)
+        self.avisos: list[tuple] = []            # (linea, mensaje) no bloquean
 
     # ── utilidades ─────────────────────────────────────────────
+    def _aviso(self, linea, msg):
+        self.avisos.append((linea, msg))
+        self._log(linea, "AVISO", msg)
+
+    @staticmethod
+    def _marcar_asignada(sim):
+        sim.inicializada = True
+        sim.alguna_vez = True
     def _log(self, linea, accion, detalle):
         self.bitacora.append((linea, accion, detalle))
 
@@ -999,7 +1015,7 @@ class AnalizadorSemantico:
         _anotar(n, tipo=t_var, de_tabla=True)
         # La variable queda inicializada aunque la asignación tenga error,
         # para no generar errores en cascada en sus usos posteriores.
-        sim.inicializada = True
+        self._marcar_asignada(sim)
         if t_exp == T_ERROR:                      # error ya reportado abajo
             _anotar(n, chk=False)
             return
@@ -1065,7 +1081,7 @@ class AnalizadorSemantico:
             self._error(f"El operador '{op}' no se puede aplicar a "
                         f"'{nombre}' ({sim.tipo_decl})", n, ERR_OPERADOR)
             return
-        if not sim.inicializada:
+        if not sim.inicializada and not sim.alguna_vez:
             _anotar(id_n, chk=False)
             _anotar(expr, tipo=sim.tipo, valor=DESCONOCIDO, chk=False)
             _anotar(n, chk=False)
@@ -1073,6 +1089,14 @@ class AnalizadorSemantico:
                         f"la variable no tiene un valor asignado",
                         n, ERR_SIN_VALOR)
             return
+        if not sim.inicializada:
+            # posiblemente asignada: se permite, con aviso
+            self._aviso(n.linea, f"'{nombre}' podría no tener valor al "
+                                 f"aplicar '{op}' (sólo se asigna en una "
+                                 f"rama o dentro de un ciclo)")
+            sim.valor = DESCONOCIDO
+            _anotar(id_n, valor=DESCONOCIDO)
+        self._marcar_asignada(sim)
 
         t = sim.tipo
         if t == T_FLOAT:                         # a float: el 1 se convierte
@@ -1111,7 +1135,7 @@ class AnalizadorSemantico:
                         ERR_NO_DECLARADA, columna=col)
             return
         sim.valor = DESCONOCIDO                   # se conoce en ejecución
-        sim.inicializada = True
+        self._marcar_asignada(sim)
         _anotar(n, tipo=sim.tipo, de_tabla=True, chk=True,
                 valor=DESCONOCIDO)
         self._log(n.linea, "VALOR",
@@ -1158,7 +1182,7 @@ class AnalizadorSemantico:
         if solo_una:
             self._log(n.linea, "VALOR",
                       "fin del if: " + ", ".join(solo_una) +
-                      " → sin asignar (sólo se asigna en una rama)")
+                      " → posiblemente asignada (sólo se asigna en una rama)")
         # Fusión: sólo se conserva el valor si ambas ramas coinciden
         desconocidas = []
         for nombre, v_else in tras_else.items():
@@ -1186,10 +1210,26 @@ class AnalizadorSemantico:
                       f"{motivo}: " + ", ".join(cambiadas) +
                       " → desconocido (cambia en cada iteración)")
 
+    def _pre_marcar_ciclo(self, cuerpo, linea, motivo):
+        """Al entrar a un ciclo, toda variable que se asigna (con '=' o
+        'cin') en su cuerpo queda al menos *posiblemente asignada*: en las
+        iteraciones siguientes ya tiene valor."""
+        nombres = []
+        for nombre in sorted(_variables_asignadas(cuerpo, solo_directas=True)):
+            sim = self.tabla.buscar(nombre)
+            if sim and not sim.alguna_vez:
+                sim.alguna_vez = True
+                nombres.append(nombre)
+        if nombres:
+            self._log(linea, "VALOR",
+                      f"{motivo}: " + ", ".join(nombres) +
+                      " → posiblemente asignada (se asigna en el cuerpo)")
+
     def _s_while_stmt(self, n):
         cond  = n.hijos[0] if n.hijos else None
         cuerpo = n.hijos[1] if len(n.hijos) > 1 else None
         self._invalidar_asignadas(cuerpo, n.linea, "inicio del while")
+        self._pre_marcar_ciclo(cuerpo, n.linea, "inicio del while")
         antes_ini = self.tabla.foto_inicializadas()
         if cond is not None:
             self._condicion(cond, "while", n)
@@ -1201,12 +1241,13 @@ class AnalizadorSemantico:
         if nuevas:
             self._log(n.linea, "VALOR",
                       "fin del while: " + ", ".join(nuevas) +
-                      " → sin asignar (el ciclo podría no ejecutarse)")
+                      " → posiblemente asignada (el ciclo podría no ejecutarse)")
 
     def _s_do_until_stmt(self, n):
         cuerpo = n.hijos[0] if n.hijos else None
         cond   = n.hijos[1] if len(n.hijos) > 1 else None
         self._invalidar_asignadas(cuerpo, n.linea, "inicio del do-until")
+        self._pre_marcar_ciclo(cuerpo, n.linea, "inicio del do-until")
         self._sentencia(cuerpo)
         if cond is not None:
             self._condicion(cond, "until", n)
@@ -1235,6 +1276,12 @@ class AnalizadorSemantico:
                             ERR_NO_DECLARADA)
                 return T_ERROR, DESCONOCIDO
             _anotar(n, loc=sim.loc, de_tabla=True)
+            if not sim.inicializada and sim.alguna_vez:
+                # posiblemente asignada: aviso, no bloquea la generación
+                self._aviso(n.linea, f"'{n.valor}' podría no tener valor "
+                                     f"aquí (sólo se asigna en una rama "
+                                     f"o dentro de un ciclo)")
+                return sim.tipo, DESCONOCIDO
             if not sim.inicializada:
                 _anotar(n, chk=False)
                 self._error(f"La variable '{n.valor}' se usa sin tener un "
@@ -1345,17 +1392,21 @@ class AnalizadorSemantico:
                           f"'{_desc(hijo)}' int → float en '{n.valor}'")
 
 
-def _variables_asignadas(n) -> set:
-    """Variables que se modifican dentro de un bloque (para ciclos)."""
+def _variables_asignadas(n, solo_directas=False) -> set:
+    """Variables que se modifican dentro de un bloque (para ciclos).
+    Con solo_directas=True se omiten ++/-- (requieren un valor previo,
+    así que no cuentan como asignación inicial)."""
     res = set()
     if n is None:
         return res
-    if n.tipo in ("asignacion", "incremento", "decremento", "cin_stmt"):
+    tipos = (("asignacion", "cin_stmt") if solo_directas else
+             ("asignacion", "incremento", "decremento", "cin_stmt"))
+    if n.tipo in tipos:
         nombre = getattr(n, "id_nombre", None)
         if nombre:
             res.add(nombre)
     for h in n.hijos:
-        res |= _variables_asignadas(h)
+        res |= _variables_asignadas(h, solo_directas)
     return res
 
 
@@ -1462,6 +1513,7 @@ class ResultadoSemantico:
         self.errores_sint = []
         self.errores_sem  = []
         self.bitacora     = []
+        self.avisos       = []      # (linea, mensaje): no bloquean
         self.ejecutado    = False   # False si hubo errores previos
 
 
@@ -1477,6 +1529,7 @@ def analizar_semantico(codigo: str) -> ResultadoSemantico:
     r.tabla       = an.tabla
     r.errores_sem = an.errores
     r.bitacora    = an.bitacora
+    r.avisos      = an.avisos
     r.ejecutado   = True
     return r
 

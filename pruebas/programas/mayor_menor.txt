@@ -1,0 +1,22 @@
+main() {
+    int n, i, x, mayor, menor;
+    cin(n);
+    i = 0;
+    while (i < n) {
+        cin(x);
+        if (i == 0) then
+            mayor = x;
+            menor = x;
+        else
+            if (x > mayor) then
+                mayor = x;
+            end;
+            if (x < menor) then
+                menor = x;
+            end;
+        end;
+        i++;
+    };
+    cout mayor;
+    cout menor;
+}
