@@ -1,0 +1,6 @@
+Estos materiales vienen del archivo RAR original y se incluyen como referencia.
+Los archivos Lex/Flex y Yacc/Bison son implementaciones ALTERNATIVAS que
+no se necesitan para construir el compilador TINY con GCC.
+No se incluyen los ejecutables DOS antiguos porque no funcionan en
+Windows moderno sin un emulador. Para generar tus propios tiny.exe y tm.exe
+usa compilar_windows.bat en la carpeta principal.

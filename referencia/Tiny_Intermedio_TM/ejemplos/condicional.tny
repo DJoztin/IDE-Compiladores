@@ -1,0 +1,7 @@
+{ Un if con rama else }
+read x;
+if x < 3 then
+    write 1
+else
+    write 2
+end

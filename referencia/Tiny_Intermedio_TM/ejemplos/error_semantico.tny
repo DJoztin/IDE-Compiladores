@@ -1,0 +1,5 @@
+{ La condicion requiere un booleano, no un entero }
+read x;
+if x then
+    write 1
+end

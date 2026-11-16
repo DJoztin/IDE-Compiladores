@@ -1,0 +1,27 @@
+TINY + TM | CODIGO INTERMEDIO NUEVO EN MENU DE AYUDA
+
+1) Extrae el ZIP y abre la carpeta Tiny_Intermedio_TM en VS Code.
+2) Comprueba que funciona GCC: gcc --version
+3) Compila TODO: .\compilar_windows.bat
+4) Genera los archivos .ci y .tm:
+     .\tiny.exe .\ejemplos\factorial.tny
+5) Abre la TM:
+     .\tm.exe .\ejemplos\factorial.tm
+6) Escribe dentro de la TM:
+     h       (ayuda)
+     v       (VER CODIGO INTERMEDIO: factorial.ci)
+     i 0 5   (ver instrucciones TM)
+     g       (ejecutar)
+     5       (dato del programa)
+     r       (ver registros)
+     d 0 2   (ver valores de x y fact)
+     q       (salir)
+
+Resultado esperado: 120.
+
+ATENCION:
+  factorial.ci = codigo de tres direcciones para fines didacticos.
+  factorial.tm = instrucciones reales que ejecuta el simulador.
+  La TM no transforma el .ci en .tm. Ambos se generan desde el arbol.
+
+Abre LEEME_PRIMERO.md para mas detalles y ejemplos.

@@ -1,0 +1,6 @@
+{ Ciclo repeat hasta que x es cero, para x positivo }
+read x;
+repeat
+    x := x - 1
+until x = 0;
+write x

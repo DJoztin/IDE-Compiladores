@@ -1,0 +1,4 @@
+{ Ejemplo de acumuladores y pila temporal }
+read x;
+y := (x + 1) * (x - 2);
+write y

@@ -1,0 +1,7 @@
+begin
+	read xx;
+	y = 3-99+(xx*22);
+	val := 3/2;
+	write val, y;
+end
+

@@ -1,0 +1,12 @@
+# CODIGO INTERMEDIO DE TRES DIRECCIONES - TINY
+# Extension didactica: NO es una salida original del compilador de Louden.
+# Los temporales t1, t2... y etiquetas L1, L2... son simbolicos.
+
+read x
+label L1
+t1 = x - 1
+x = t1
+t2 = x == 0
+if_false t2 goto L1
+write x
+halt

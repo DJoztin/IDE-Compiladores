@@ -1,0 +1,16 @@
+Pruebas de la extension: codigo intermedio y menu v
+
+Compilacion: GCC, C11, -Wall -Wextra -Wpedantic -Werror (Linux).
+
+- Compilador TINY genera archivo .ci y .tm desde .tny validos.
+- Menu h del simulador muestra la opcion v.
+- Opcion v abre el .ci del mismo nombre que el .tm cargado.
+- Opcion v informa si falta el .ci, sin impedir ejecutar .tm.
+- Los archivos .ci expresan aritmetica, asignacion, lectura/escritura,
+  if con else, if sin else, repeat/until, etiquetas y temporales.
+- El backend original de Louden (cgen.c, code.c) se mantiene intacto.
+- Se probaron factorial, aritmetica, condicional y ciclo.
+- El factorial conserva exactamente 42 instrucciones TM.
+- Las comprobaciones reales se corrieron en Linux, no en Windows.
+
+Para instrucciones de uso en VS Code: LEEME_PRIMERO.md.

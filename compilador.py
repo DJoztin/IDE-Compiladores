@@ -860,8 +860,8 @@ class TablaSimbolos:
 
     def registrar_linea(self, nombre, linea):
         sim = self._tabla.get(nombre)
-        if sim and linea and linea not in sim.lineas:
-            sim.lineas.append(linea)
+        if sim and linea:
+            sim.lineas.append(linea)      # una entrada por cada aparición
 
     def simbolos(self) -> list:
         return sorted(self._tabla.values(), key=lambda s: s.loc)
@@ -970,6 +970,7 @@ class AnalizadorSemantico:
                 nombre = ident.valor
                 previo = self.tabla.buscar(nombre)
                 if previo is not None:
+                    self.tabla.registrar_linea(nombre, ident.linea)
                     _anotar(ident, chk=False)
                     self._error(
                         f"'{nombre}' ya fue declarada en la línea "
@@ -1040,24 +1041,57 @@ class AnalizadorSemantico:
             self._error(f"Variable '{nombre}' no declarada", n,
                         ERR_NO_DECLARADA)
             return
+
+        # Desglose en el árbol anotado:  a++ ≡ a = a + 1   (a-- ≡ a = a - 1)
+        aop = "+" if op == "++" else "-"
+        expr = NodoSint("expresion", aop, n.linea, n.columna)
+        id_n = NodoSint("identificador", nombre, n.linea, n.columna)
+        uno  = NodoSint("entero", "1", n.linea, n.columna)
+        expr.agregar(id_n)
+        expr.agregar(uno)
+        n.agregar(expr)
+        _anotar(expr, nota=f"{nombre}{op} ≡ {nombre} = {nombre} {aop} 1")
+        self._log(n.linea, "DESGLOSE",
+                  f"{nombre}{op} ≡ {nombre} = {nombre} {aop} 1")
+
+        v_id = sim.valor if sim.inicializada else DESCONOCIDO
+        _anotar(id_n, loc=sim.loc, de_tabla=True, tipo=sim.tipo, valor=v_id)
+        _anotar(uno, tipo=T_INT, valor=1)
         _anotar(n, tipo=sim.tipo, de_tabla=True)
+
         if sim.tipo not in NUMERICOS:
+            _anotar(expr, tipo=T_ERROR, chk=False)
             _anotar(n, chk=False)
             self._error(f"El operador '{op}' no se puede aplicar a "
                         f"'{nombre}' ({sim.tipo_decl})", n, ERR_OPERADOR)
             return
         if not sim.inicializada:
+            _anotar(id_n, chk=False)
+            _anotar(expr, tipo=sim.tipo, valor=DESCONOCIDO, chk=False)
             _anotar(n, chk=False)
             self._error(f"No se puede aplicar '{op}' a '{nombre}': "
                         f"la variable no tiene un valor asignado",
                         n, ERR_SIN_VALOR)
             return
+
+        t = sim.tipo
+        if t == T_FLOAT:                         # a float: el 1 se convierte
+            _anotar(uno, conv="int→float")
+            self._log(n.linea, "CONVERTIR", f"'1' int → float en '{aop}'")
         if sim.valor is not DESCONOCIDO:
             sim.valor = sim.valor + (1 if op == "++" else -1)
-        _anotar(n, chk=True, valor=sim.valor)
+            if t == T_FLOAT:
+                sim.valor = float(sim.valor)
+        _anotar(expr, tipo=t, valor=sim.valor)
+        _anotar(n, chk=True, valor=sim.valor, asig=f"{nombre}:{t} ← {t}")
+        self._log(n.linea, "TIPO",
+                  f"{nombre} {aop} 1 : {t} {aop} int → {t}"
+                  + (f"  (valor {fmt_valor(sim.valor)})"
+                     if sim.valor is not DESCONOCIDO else ""))
         self._log(n.linea, "VERIFICAR",
-                  f"{nombre}{op} sobre {sim.tipo} ✓  "
-                  f"(valor {fmt_valor(sim.valor)})")
+                  f"asignación {nombre}:{t} ← {t}  ✓")
+        if sim.valor is not DESCONOCIDO:
+            self._log(n.linea, "VALOR", f"{nombre} = {fmt_valor(sim.valor)}")
 
     def _s_incremento(self, n):
         self._incr_decr(n, "++")
@@ -1242,17 +1276,10 @@ class AnalizadorSemantico:
             if op == "/" and vd is not DESCONOCIDO and vd == 0:
                 self._error("División entre cero", n, ERR_DIV_CERO)
                 return T_ERROR, DESCONOCIDO
-            exacta = False
-            if T_FLOAT in (ti, td):
-                t = T_FLOAT
-            elif op == "/":
-                # int / int: si la división es exacta (sin residuo) el
-                # resultado se queda int (8/2 = 4); si tiene residuo o no se
-                # conocen los valores, es float (1/3 = 0.33)
-                exacta = conocidos and vi % vd == 0
-                t = T_INT if exacta else T_FLOAT
-            else:
-                t = T_INT
+            # int op int → int (la división entre enteros es entera y trunca:
+            # 1/3 = 0, 8/7 = 1); si algún operando es float → float
+            t = T_FLOAT if T_FLOAT in (ti, td) else T_INT
+            entera = (op == "/" and t == T_INT)
             self._coercion(n, izq, ti, der, td, t)
             v = DESCONOCIDO
             if conocidos:
@@ -1260,14 +1287,16 @@ class AnalizadorSemantico:
                 elif op == "-": v = vi - vd
                 elif op == "*": v = vi * vd
                 elif t == T_INT:
-                    v = vi // vd                  # división exacta
+                    # división entera truncando hacia cero (como en C)
+                    q = abs(vi) // abs(vd)
+                    v = q if (vi >= 0) == (vd >= 0) else -q
                 else:
                     v = float(vi) / float(vd)
                 if t == T_FLOAT:
                     v = float(v)
             self._log(n.linea, "TIPO",
                       f"{_desc(n)} : {ti} {op} {td} → {t}"
-                      + (" (división exacta)" if exacta else "")
+                      + (" (división entera)" if entera else "")
                       + (f"  (valor {fmt_valor(v)})" if v is not DESCONOCIDO else ""))
             return t, v
 
@@ -1339,6 +1368,8 @@ def texto_atributos(n) -> str:
         return ""
     SINT, HER = "↑sintetizado", "↓heredado"
     partes = []
+    if "nota" in a:
+        partes.append(a["nota"])
     if "dtype" in a:
         # en 'declaracion' se sintetiza del token; hacia los ids se hereda
         partes.append(f"dtype={a['dtype']} " +
