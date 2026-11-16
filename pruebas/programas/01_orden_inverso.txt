@@ -1,0 +1,11 @@
+main() {
+    int a, b, c, d;
+    cin(a);
+    cin(b);
+    cin(c);
+    cin(d);
+    cout d;
+    cout c;
+    cout b;
+    cout a;
+}

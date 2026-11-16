@@ -1,0 +1,12 @@
+main() {
+    /* 1^1 + 2^2 + ... + N^N */
+    int n, i, s;
+    cin(n);
+    s = 0;
+    i = 1;
+    do {
+        s = s + i ^ i;
+        i++;
+    } until (i > n);
+    cout s;
+}

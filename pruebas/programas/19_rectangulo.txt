@@ -1,0 +1,9 @@
+main() {
+    float base, altura, per, area;
+    cin(base);
+    cin(altura);
+    per = 2 * (base + altura);
+    area = base * altura;
+    cout per;
+    cout area;
+}

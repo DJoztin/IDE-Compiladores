@@ -1,0 +1,10 @@
+main() {
+    float h, t;
+    cin(h);
+    if (h >= 0) then
+        t = h / 4 + 40;
+        cout t;
+    else
+        cout -1;
+    end;
+}

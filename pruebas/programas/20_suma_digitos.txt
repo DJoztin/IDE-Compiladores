@@ -1,0 +1,10 @@
+main() {
+    int n, s;
+    cin(n);
+    s = 0;
+    do {
+        s = s + n % 10;
+        n = n / 10;
+    } until (n == 0);
+    cout s;
+}

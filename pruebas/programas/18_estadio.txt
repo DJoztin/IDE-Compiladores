@@ -1,0 +1,29 @@
+main() {
+    float p1, p2, p3, p4, p5, precio, importe, t1, t2, t3, t4, t5, total;
+    int clave, cant;
+    cin(p1); cin(p2); cin(p3); cin(p4); cin(p5);
+    t1 = 0; t2 = 0; t3 = 0; t4 = 0; t5 = 0;
+    cin(clave);
+    while (clave != -1) {
+        cin(cant);
+        precio = 0;
+        if (clave == 1) then precio = p1; end;
+        if (clave == 2) then precio = p2; end;
+        if (clave == 3) then precio = p3; end;
+        if (clave == 4) then precio = p4; end;
+        if (clave == 5) then precio = p5; end;
+        importe = precio * cant;
+        cout clave;
+        cout cant;
+        cout importe;
+        if (clave == 1) then t1 = t1 + importe; end;
+        if (clave == 2) then t2 = t2 + importe; end;
+        if (clave == 3) then t3 = t3 + importe; end;
+        if (clave == 4) then t4 = t4 + importe; end;
+        if (clave == 5) then t5 = t5 + importe; end;
+        cin(clave);
+    };
+    total = t1 + t2 + t3 + t4 + t5;
+    cout t1; cout t2; cout t3; cout t4; cout t5;
+    cout total;
+}

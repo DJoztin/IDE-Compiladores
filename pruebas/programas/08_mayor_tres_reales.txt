@@ -1,0 +1,16 @@
+main() {
+    real a, b, c, m;
+    cin(a);
+    cin(b);
+    cin(c);
+    if (a >= b && a >= c) then
+        m = a;
+    else
+        if (b >= c) then
+            m = b;
+        else
+            m = c;
+        end;
+    end;
+    cout m;
+}

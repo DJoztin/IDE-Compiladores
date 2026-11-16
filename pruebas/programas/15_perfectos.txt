@@ -1,0 +1,19 @@
+main() {
+    int lim, n, d, suma;
+    cin(lim);
+    n = 2;
+    while (n <= lim) {
+        suma = 0;
+        d = 1;
+        while (d < n) {
+            if (n % d == 0) then
+                suma = suma + d;
+            end;
+            d++;
+        };
+        if (suma == n) then
+            cout n;
+        end;
+        n++;
+    };
+}

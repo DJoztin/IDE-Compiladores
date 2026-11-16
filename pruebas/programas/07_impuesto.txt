@@ -1,0 +1,19 @@
+main() {
+    float costo, imp, total;
+    cin(costo);
+    if (costo <= 20) then
+        imp = 0;
+    else
+        if (costo <= 40) then
+            imp = (costo - 20) * 0.30;
+        else
+            if (costo > 500) then
+                imp = 20 * 0.30 + (costo - 40) * 0.50;
+            else
+                imp = 20 * 0.30 + (costo - 40) * 0.40;
+            end;
+        end;
+    end;
+    total = costo + imp;
+    cout total;
+}

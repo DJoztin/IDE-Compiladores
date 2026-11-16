@@ -1,0 +1,14 @@
+main() {
+    /* positivo = 0, negativo = 1, nulo = 2 */
+    int n;
+    cin(n);
+    if (n > 0) then
+        cout 0;
+    else
+        if (n < 0) then
+            cout 1;
+        else
+            cout 2;
+        end;
+    end;
+}

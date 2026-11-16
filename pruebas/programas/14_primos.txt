@@ -1,0 +1,19 @@
+main() {
+    int m, n, d, primo;
+    cin(m);
+    n = 2;
+    while (n < m) {
+        primo = 1;
+        d = 2;
+        while (d * d <= n && primo == 1) {
+            if (n % d == 0) then
+                primo = 0;
+            end;
+            d++;
+        };
+        if (primo == 1) then
+            cout n;
+        end;
+        n++;
+    };
+}

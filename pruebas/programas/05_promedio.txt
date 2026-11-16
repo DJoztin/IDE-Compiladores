@@ -1,0 +1,13 @@
+main() {
+    int id;
+    float c1, c2, c3, c4, c5, prom;
+    cin(id);
+    cin(c1);
+    cin(c2);
+    cin(c3);
+    cin(c4);
+    cin(c5);
+    prom = (c1 + c2 + c3 + c4 + c5) / 5;
+    cout id;
+    cout prom;
+}
