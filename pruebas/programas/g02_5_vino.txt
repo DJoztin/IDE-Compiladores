@@ -1,0 +1,36 @@
+main() {
+    /* G2-5, G5-5, G8-5: N anios; por anio los litros de los 5 tipos.
+       Imprime el total de cada anio (dentro del ciclo), luego el total de
+       cada tipo, el anio y los litros del maximo del tipo 2, y el primer
+       anio sin produccion del tipo 3 (0 si no existe). */
+    int n, anio, anio2, anio3;
+    float v1, v2, v3, v4, v5, t1, t2, t3, t4, t5, ta, max2;
+    cin(n);
+    t1 = 0; t2 = 0; t3 = 0; t4 = 0; t5 = 0;
+    anio3 = 0;
+    anio = 1;
+    while (anio <= n) {
+        cin(v1); cin(v2); cin(v3); cin(v4); cin(v5);
+        t1 = t1 + v1; t2 = t2 + v2; t3 = t3 + v3;
+        t4 = t4 + v4; t5 = t5 + v5;
+        ta = v1 + v2 + v3 + v4 + v5;
+        cout ta;
+        if (anio == 1) then
+            max2 = v2;
+            anio2 = 1;
+        else
+            if (v2 > max2) then
+                max2 = v2;
+                anio2 = anio;
+            end;
+        end;
+        if (v3 == 0 && anio3 == 0) then
+            anio3 = anio;
+        end;
+        anio++;
+    };
+    cout t1; cout t2; cout t3; cout t4; cout t5;
+    cout anio2;
+    cout max2;
+    cout anio3;
+}

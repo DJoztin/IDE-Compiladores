@@ -1349,6 +1349,8 @@ class AnalizadorSemantico:
         v = DESCONOCIDO
         if vb is not DESCONOCIDO and ve is not DESCONOCIDO:
             try:
+                if ve > 10000:
+                    raise OverflowError
                 v = vb ** ve if ve > 0 else 1
                 v = float(v) if tb == T_FLOAT else v
             except OverflowError:

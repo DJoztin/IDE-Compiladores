@@ -7,7 +7,7 @@
 
 1. Abrir `dist/Ide.exe` (o `python ide_compilador.py`).
 2. Opcional: `python pruebas/run_tests.py` debe terminar en `TODAS LAS PRUEBAS PASARON`.
-3. Tener a la mano `pruebas/programas/` como respaldo (hay 30 programas de ejercicios con entradas y salidas esperadas).
+3. Tener a la mano `docs/EJERCICIOS.md`: cada ejercicio de los 12 grupos tiene su programa listo en `pruebas/programas/` (65 programas con entradas y salidas esperadas).
 
 ## Flujo por cada programa (los 7 pasos)
 

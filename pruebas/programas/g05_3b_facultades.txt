@@ -1,0 +1,30 @@
+main() {
+    /* G5-3: carrera 1 Economia, 2 Computacion, 3 Administracion,
+       4 Contabilidad. Si es aceptado imprime matricula, carrera y 1;
+       si no, imprime 0. */
+    int matricula, carrera, semestre, acepta;
+    float prom;
+    cin(matricula);
+    cin(carrera);
+    cin(semestre);
+    cin(prom);
+    acepta = 0;
+    if (carrera == 1) then
+        if (semestre >= 6 && prom >= 8.8) then acepta = 1; end;
+    else
+        if (carrera == 2) then
+            if (semestre > 6 && prom > 8.5) then acepta = 1; end;
+        else
+            if (carrera == 3 || carrera == 4) then
+                if (semestre > 5 && prom > 8.5) then acepta = 1; end;
+            end;
+        end;
+    end;
+    if (acepta == 1) then
+        cout matricula;
+        cout carrera;
+        cout 1;
+    else
+        cout 0;
+    end;
+}

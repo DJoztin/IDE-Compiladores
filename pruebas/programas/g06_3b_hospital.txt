@@ -1,0 +1,31 @@
+main() {
+    /* G6-3: tipo de enfermedad (1:$25 2:$16 3:$20 4:$32 por dia), edad y
+       dias internado. Entre 14 y 22 anios: 10% adicional. */
+    int tipo, edad, dias;
+    float costo, total;
+    cin(tipo);
+    cin(edad);
+    cin(dias);
+    if (tipo == 1) then
+        costo = 25;
+    else
+        if (tipo == 2) then
+            costo = 16;
+        else
+            if (tipo == 3) then
+                costo = 20;
+            else
+                if (tipo == 4) then
+                    costo = 32;
+                else
+                    costo = 0;
+                end;
+            end;
+        end;
+    end;
+    total = costo * dias;
+    if (edad >= 14 && edad <= 22) then
+        total = total * 1.10;
+    end;
+    cout total;
+}

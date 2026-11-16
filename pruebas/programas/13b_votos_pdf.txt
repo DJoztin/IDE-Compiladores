@@ -1,0 +1,21 @@
+main() {
+    int v, c1, c2, c3, c4, total;
+    float p;
+    c1 = 0; c2 = 0; c3 = 0; c4 = 0; total = 0;
+    cin(v);
+    while (v != 0) {
+        if (v == 1) then c1++; end;
+        if (v == 2) then c2++; end;
+        if (v == 3) then c3++; end;
+        if (v == 4) then c4++; end;
+        total++;
+        cin(v);
+    };
+    cout c1; cout c2; cout c3; cout c4;
+    if (total > 0) then
+        p = c1 * 100.0 / total; cout p;
+        p = c2 * 100.0 / total; cout p;
+        p = c3 * 100.0 / total; cout p;
+        p = c4 * 100.0 / total; cout p;
+    end;
+}

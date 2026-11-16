@@ -254,7 +254,7 @@ Formato: `[ERROR SEMÁNTICO] Línea X, Columna Y: [categoría] mensaje`
 
 ## 12. Fase final — Generación de código TM y ejecución (IMPLEMENTADO)
 
-**Rama:** `fase-final`. Documentos: `docs/CORRESPONDENCIA_TINY.md` (tabla nodo ↔ TINY ↔ TM, extensión de reales), `docs/GUION_REVISION.md` (pasos para la revisión), `docs/NO_SOPORTADO.md`.
+**Rama:** `fase-final`. Documentos: `docs/EJERCICIOS.md` (programa de cada ejercicio por grupo), `docs/CORRESPONDENCIA_TINY.md` (tabla nodo ↔ TINY ↔ TM, extensión de reales), `docs/GUION_REVISION.md` (pasos para la revisión), `docs/NO_SOPORTADO.md`.
 
 ### Ajuste al semántico (Fase 0)
 Tres estados por variable: *nunca asignada*, *posiblemente asignada*, *asignada*. Sólo es **error** usar una variable que nunca se asignó antes (`=`, `cin` o `++/--` válido). Si se asignó sólo en una rama de un `if` o dentro de un ciclo, su uso genera un **AVISO** (bitácora y `ResultadoSemantico.avisos`), no bloquea la generación, y la tabla muestra `?`. Al entrar a un ciclo, lo que se asigna con `=`/`cin` en su cuerpo pasa a *posiblemente asignada*. `TestSemantica_casos_extra.txt` sigue dando 13 errores y la copia limpia del test adaptado (`pruebas/datos/`) 7.
@@ -288,4 +288,4 @@ potencia → factor ('^' potencia)?          (asociativa a la derecha)
 - `IDE.spec` incluye `code_tm.py`, `cgen.py`, `intermedio.py` y `tm.py` en `datas`.
 
 ### Pruebas
-`python pruebas/run_tests.py` (sin dependencias): oro contra TINY (factorial, aritmética, condicional, ciclo: mismo `.tm` y `.ci`), la TM ejecuta los `.tm` de la docente, ~40 casos por construcción (TM == oráculo `interprete_ast.py` == esperado), errores (sin `.tm`, división entre cero, ciclo infinito) y 30 programas de ejercicios en `pruebas/programas/` (`.txt`, `.in`, `.esperado`).
+`python pruebas/run_tests.py` (sin dependencias): oro contra TINY (factorial, aritmética, condicional, ciclo: mismo `.tm` y `.ci`), la TM ejecuta los `.tm` de la docente, ~40 casos por construcción (TM == oráculo `interprete_ast.py` == esperado), errores (sin `.tm`, división entre cero, ciclo infinito) y 65 programas en `pruebas/programas/` (`.txt`, `.in`, `.esperado`) que cubren todos los ejercicios de los 12 grupos (índice en `docs/EJERCICIOS.md`).

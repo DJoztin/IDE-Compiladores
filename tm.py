@@ -45,6 +45,7 @@ class Estado:
     DMEM_ERR = "DMEM_ERR"
     ZERODIVIDE = "ZERODIVIDE"
     LIMITE = "LIMITE"
+    OVERFLOW = "OVERFLOW"
 
 
 MENSAJE_ESTADO = {
@@ -54,9 +55,11 @@ MENSAJE_ESTADO = {
     Estado.DMEM_ERR: "Error: memoria de datos",
     Estado.ZERODIVIDE: "Error: division entre cero",
     Estado.LIMITE: "Error: limite de pasos alcanzado (posible ciclo infinito)",
+    Estado.OVERFLOW: "Error: desbordamiento numerico",
 }
 
-ERRORES = (Estado.IMEM_ERR, Estado.DMEM_ERR, Estado.ZERODIVIDE, Estado.LIMITE)
+ERRORES = (Estado.IMEM_ERR, Estado.DMEM_ERR, Estado.ZERODIVIDE, Estado.LIMITE,
+           Estado.OVERFLOW)
 
 
 def fmt_valor(v) -> str:
@@ -280,6 +283,12 @@ class MaquinaTM:
 
     # ── stepTM ────────────────────────────────────────────────
     def paso(self) -> str:
+        try:
+            return self._paso()
+        except OverflowError:
+            return Estado.OVERFLOW
+
+    def _paso(self) -> str:
         if self.esperando_reg is not None:
             return Estado.NECESITA_ENTRADA
         if self.pasos >= self.max_pasos:

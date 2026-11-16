@@ -1,0 +1,9 @@
+main() {
+    /* G7-1, G12-1: (A + B)^2 / 3 */
+    int a, b;
+    float r;
+    cin(a);
+    cin(b);
+    r = (a + b) ^ 2 / 3.0;
+    cout r;
+}

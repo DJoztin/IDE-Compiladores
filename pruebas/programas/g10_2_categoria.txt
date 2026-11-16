@@ -1,0 +1,25 @@
+main() {
+    /* G10-2, G11-2: aumento por categoria 1:15% 2:10% 3:8% 4:7%.
+       Imprime la categoria y el nuevo sueldo. */
+    int cat;
+    float sueldo;
+    cin(cat);
+    cin(sueldo);
+    if (cat == 1) then
+        sueldo = sueldo * 1.15;
+    else
+        if (cat == 2) then
+            sueldo = sueldo * 1.10;
+        else
+            if (cat == 3) then
+                sueldo = sueldo * 1.08;
+            else
+                if (cat == 4) then
+                    sueldo = sueldo * 1.07;
+                end;
+            end;
+        end;
+    end;
+    cout cat;
+    cout sueldo;
+}

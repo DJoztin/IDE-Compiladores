@@ -1,29 +1,27 @@
 main() {
-    float p1, p2, p3, p4, p5, precio, importe, t1, t2, t3, t4, t5, total;
-    int clave, cant;
+    /* G4-5, G10-5, G12-5: precios P1..P5; ventas CLAVE, CANT hasta -1, -1 */
+    float p1, p2, p3, p4, p5, precio, importe, total;
+    int clave, cant, b1, b2, b3, b4, b5;
     cin(p1); cin(p2); cin(p3); cin(p4); cin(p5);
-    t1 = 0; t2 = 0; t3 = 0; t4 = 0; t5 = 0;
+    b1 = 0; b2 = 0; b3 = 0; b4 = 0; b5 = 0;
+    total = 0;
     cin(clave);
+    cin(cant);
     while (clave != -1) {
-        cin(cant);
         precio = 0;
-        if (clave == 1) then precio = p1; end;
-        if (clave == 2) then precio = p2; end;
-        if (clave == 3) then precio = p3; end;
-        if (clave == 4) then precio = p4; end;
-        if (clave == 5) then precio = p5; end;
+        if (clave == 1) then precio = p1; b1 = b1 + cant; end;
+        if (clave == 2) then precio = p2; b2 = b2 + cant; end;
+        if (clave == 3) then precio = p3; b3 = b3 + cant; end;
+        if (clave == 4) then precio = p4; b4 = b4 + cant; end;
+        if (clave == 5) then precio = p5; b5 = b5 + cant; end;
         importe = precio * cant;
         cout clave;
         cout cant;
         cout importe;
-        if (clave == 1) then t1 = t1 + importe; end;
-        if (clave == 2) then t2 = t2 + importe; end;
-        if (clave == 3) then t3 = t3 + importe; end;
-        if (clave == 4) then t4 = t4 + importe; end;
-        if (clave == 5) then t5 = t5 + importe; end;
+        total = total + importe;
         cin(clave);
+        cin(cant);
     };
-    total = t1 + t2 + t3 + t4 + t5;
-    cout t1; cout t2; cout t3; cout t4; cout t5;
+    cout b1; cout b2; cout b3; cout b4; cout b5;
     cout total;
 }

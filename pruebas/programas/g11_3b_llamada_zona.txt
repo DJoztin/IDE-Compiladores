@@ -1,0 +1,21 @@
+main() {
+    /* G11-3: costo de una llamada segun la clave de zona y los minutos.
+       12:2  15:2.2  18:4.5  19:3.5  23:6  25:6  29:5 ; clave invalida: -1 */
+    int clave, minutos;
+    float precio, costo;
+    cin(clave);
+    cin(minutos);
+    precio = 0;
+    if (clave == 12) then precio = 2; end;
+    if (clave == 15) then precio = 2.2; end;
+    if (clave == 18) then precio = 4.5; end;
+    if (clave == 19) then precio = 3.5; end;
+    if (clave == 23 || clave == 25) then precio = 6; end;
+    if (clave == 29) then precio = 5; end;
+    if (precio > 0) then
+        costo = precio * minutos;
+        cout costo;
+    else
+        cout -1;
+    end;
+}

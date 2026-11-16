@@ -1,0 +1,11 @@
+main() {
+    /* G8-2, G12-2: 1 si P^3 + Q^4 - 2*P^2 < 680, 0 si no */
+    int p, q;
+    cin(p);
+    cin(q);
+    if (p ^ 3 + q ^ 4 - 2 * p ^ 2 < 680) then
+        cout 1;
+    else
+        cout 0;
+    end;
+}

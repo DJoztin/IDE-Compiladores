@@ -1,0 +1,7 @@
+main() {
+    /* G6-1: segundos que hay en un numero de dias */
+    int dias, seg;
+    cin(dias);
+    seg = dias * 24 * 60 * 60;
+    cout seg;
+}

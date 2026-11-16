@@ -1,0 +1,19 @@
+main() {
+    /* G7-3: tres enteros en orden creciente */
+    int a, b, c;
+    cin(a);
+    cin(b);
+    cin(c);
+    if (a <= b && a <= c) then
+        cout a;
+        if (b <= c) then cout b; cout c; else cout c; cout b; end;
+    else
+        if (b <= a && b <= c) then
+            cout b;
+            if (a <= c) then cout a; cout c; else cout c; cout a; end;
+        else
+            cout c;
+            if (a <= b) then cout a; cout b; else cout b; cout a; end;
+        end;
+    end;
+}

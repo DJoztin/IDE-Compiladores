@@ -1,0 +1,8 @@
+main() {
+    /* G8-1, G11-1: cambio = dinero entregado - costo */
+    float costo, dinero, cambio;
+    cin(costo);
+    cin(dinero);
+    cambio = dinero - costo;
+    cout cambio;
+}
