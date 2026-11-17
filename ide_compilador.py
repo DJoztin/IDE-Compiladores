@@ -2006,7 +2006,7 @@ class IDEMainWindow(QMainWindow):
         self.nb_errors.addTab(self.err_lexico, "Errores Lexicos")
         self.nb_errors.addTab(self.err_sint,   "Errores Sintacticos")
         self.nb_errors.addTab(self.err_sem,    "Errores Semanticos")
-        self.nb_errors.addTab(self.out_exec,   "Máquina TM (ejecución)")
+        self.nb_errors.addTab(self.out_exec,   "Ejecución")
 
         self.dock_errors = self._make_dock("ERRORES / SALIDA",
                                            self.nb_errors, BOTTOM)

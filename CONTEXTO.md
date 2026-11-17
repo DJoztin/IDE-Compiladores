@@ -282,7 +282,7 @@ potencia → factor ('^' potencia)?          (asociativa a la derecha)
 
 ### IDE
 - Pestaña **Código Intermedio** (`CodigoPanel`): sub-pestaña *Código TM (.tm)* con vista Tabla (Dir · Instrucción · Operandos · Comentario, colores por tipo) o Archivo (texto en orden de emisión); sub-pestaña *Código intermedio de tres direcciones (.ci)*; botones Guardar .tm / Guardar .ci / Copiar.
-- Pestaña **Máquina TM (ejecución)** (`TMPanel`): consola con el diálogo de `tm.exe`, línea de entrada para `IN` y para comandos `h v i d r s g t p c q`, botones Ejecutar/Paso/Reiniciar/Detener, Rastreo y Contar; registros y memoria de variables. Ejecuta por lotes con `QTimer` (no congela la UI); límite de 20 000 000 pasos.
+- Pestaña **Ejecución** (`TMPanel`): consola con el diálogo de `tm.exe`, línea de entrada para `IN` y para comandos `h v i d r s g t p c q`, botones Ejecutar/Paso/Reiniciar/Detener, Rastreo y Contar; registros y memoria de variables. Ejecuta por lotes con `QTimer` (no congela la UI); límite de 20 000 000 pasos.
 - **F8** compila todas las fases y llena árbol, semántico, tabla y código. **F9** siempre recompila y carga en la TM el texto del `.tm` recién generado.
 - Editar el fuente o cambiar de pestaña marca los paneles como `⚠ desactualizado` y deshabilita Paso/Reiniciar.
 - `Ide.exe --autoprueba prog.txt salida.txt [entradas...]` compila y ejecuta sin ventana (para comprobar el `.exe`).

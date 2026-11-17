@@ -18,7 +18,7 @@
 | 3 | Árbol válido | pestaña **Sintactico** (árbol) y **Semantico** (árbol anotado); **Errores Semanticos** dice `(sin errores)` | árbol y tabla de símbolos llenos |
 | 4 | Generar `.tm` | ya lo hizo F8: `programa.tm` y `programa.ci` quedan junto al fuente | — |
 | 5 | Ver el `.tm` y el `.ci` | pestaña **Código Intermedio** → sub-pestaña **Código TM (.tm)**: vista *Tabla* (Dir · Instrucción · Operandos · Comentario) o *Archivo* (el texto tal cual, estilo TINY). Sub-pestaña **Código intermedio de tres direcciones (.ci)** | direcciones, instrucciones y operandos |
-| 6 | Ejecutar en la TM | **F9** (o el botón Ejecutar). Recompila y carga en la TM el `.tm` recién generado. Cuando aparece `Ingrese un numero (IN) - <qué se pide>:` escribir el valor en la línea de abajo y **Enter**. Si el valor no es válido, el programa avisa y lo vuelve a pedir | pestaña **Máquina TM (ejecución)** |
+| 6 | Ejecutar en la TM | **F9** (o el botón Ejecutar). Recompila y carga en la TM el `.tm` recién generado. Cuando aparece `Ingrese un numero (IN) - <qué se pide>:` escribir el valor en la línea de abajo y **Enter**. Si el valor no es válido, el programa avisa y lo vuelve a pedir | pestaña **Ejecución** |
 | 7 | Comprobar el resultado | `Resultado del programa (OUT): …` y `Ejecucion finalizada (HALT)`; a la derecha registros y memoria de variables | valores finales de cada variable |
 
 Extras que se pueden mostrar si la docente lo pide (en la línea de comandos de la TM, igual que `tm.exe`):

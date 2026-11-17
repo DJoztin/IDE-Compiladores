@@ -121,7 +121,7 @@ ide_compilador.py              compilador.py
 | Errores Lexicos | Errores con número de línea y columna |
 | Errores Sintacticos | Errores con número de línea y descripción |
 | Errores Semanticos | Errores con número de línea y descripción |
-| Máquina TM (ejecución) | Consola de la TM (IN/OUT y comandos), registros y memoria de variables |
+| Ejecución | Consola de la TM (IN/OUT y comandos), registros y memoria de variables |
 
 > Cuando una fase produce errores, el IDE cambia automáticamente al tab de errores correspondiente.
 > Cuando no hay errores, muestra `(sin errores)` en verde.
