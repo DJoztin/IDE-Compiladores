@@ -1,7 +1,12 @@
 main() {
-    /* G9-4: obtiene y cuenta los primos menores que M */
+    /* G9-4 (repetitivo): obtiene y cuenta los primos menores que M */
     int m, n, d, primo, cuenta;
-    cin(m);
+    do {
+        cin("M (entero >= 2)", m);
+        if (m < 2) then
+            cout "M debe ser 2 o mayor";
+        end;
+    } until (m >= 2);
     cuenta = 0;
     n = 2;
     while (n < m) {
@@ -14,10 +19,10 @@ main() {
             d++;
         };
         if (primo == 1) then
-            cout n;
+            cout "Primo", n;
             cuenta++;
         end;
         n++;
     };
-    cout cuenta;
+    cout "Cantidad de primos menores que M", cuenta;
 }

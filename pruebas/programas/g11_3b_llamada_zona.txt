@@ -1,10 +1,12 @@
 main() {
-    /* G11-3: costo de una llamada segun la clave de zona y los minutos.
-       12:2  15:2.2  18:4.5  19:3.5  23:6  25:6  29:5 ; clave invalida: -1 */
+    /* G11-3 (selectivo): costo de una llamada internacional segun la zona.
+       12 America del Norte $2, 15 America Central $2.2,
+       18 America del Sur $4.5, 19 Europa $3.5, 23 Asia $6,
+       25 Africa $6, 29 Oceania $5 (por minuto) */
     int clave, minutos;
     float precio, costo;
-    cin(clave);
-    cin(minutos);
+    cin("Clave de zona (12, 15, 18, 19, 23, 25 o 29)", clave);
+    cin("Minutos hablados (>= 1)", minutos);
     precio = 0;
     if (clave == 12) then precio = 2; end;
     if (clave == 15) then precio = 2.2; end;
@@ -12,10 +14,14 @@ main() {
     if (clave == 19) then precio = 3.5; end;
     if (clave == 23 || clave == 25) then precio = 6; end;
     if (clave == 29) then precio = 5; end;
-    if (precio > 0) then
-        costo = precio * minutos;
-        cout costo;
+    if (precio == 0) then
+        cout "Clave de zona no valida: usa 12, 15, 18, 19, 23, 25 o 29";
     else
-        cout -1;
+        if (minutos < 1) then
+            cout "Los minutos deben ser 1 o mas";
+        else
+            costo = precio * minutos;
+            cout "Costo total de la llamada ($)", costo;
+        end;
     end;
 }

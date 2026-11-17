@@ -1,19 +1,26 @@
 main() {
-    /* G3-2: A, B y C enteros diferentes, en forma descendente */
+    /* G3-2 (selectivo): A, B y C enteros diferentes, en forma descendente */
     int a, b, c;
-    cin(a);
-    cin(b);
-    cin(c);
-    if (a > b && a > c) then
-        cout a;
-        if (b > c) then cout b; cout c; else cout c; cout b; end;
+    cin("Dato A (entero)", a);
+    cin("Dato B (entero, diferente de A)", b);
+    cin("Dato C (entero, diferente de A y B)", c);
+    if (a == b || a == c || b == c) then
+        cout "Los tres numeros deben ser diferentes";
     else
-        if (b > a && b > c) then
-            cout b;
-            if (a > c) then cout a; cout c; else cout c; cout a; end;
+        if (a > b && a > c) then
+            cout "Mayor", a;
+            if (b > c) then cout "Medio", b; cout "Menor", c;
+            else cout "Medio", c; cout "Menor", b; end;
         else
-            cout c;
-            if (a > b) then cout a; cout b; else cout b; cout a; end;
+            if (b > a && b > c) then
+                cout "Mayor", b;
+                if (a > c) then cout "Medio", a; cout "Menor", c;
+                else cout "Medio", c; cout "Menor", a; end;
+            else
+                cout "Mayor", c;
+                if (a > b) then cout "Medio", a; cout "Menor", b;
+                else cout "Medio", b; cout "Menor", a; end;
+            end;
         end;
     end;
 }

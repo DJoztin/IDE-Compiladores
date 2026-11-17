@@ -7,7 +7,7 @@ a = Analysis(
     binaries=[],
     datas=[('compilador.py', '.'), ('code_tm.py', '.'), ('cgen.py', '.'),
            ('intermedio.py', '.'), ('tm.py', '.')],
-    hiddenimports=['PyQt6', 'PyQt6.QtWidgets', 'PyQt6.QtGui', 'PyQt6.QtCore', 'highlighter', 'token_panel'],
+    hiddenimports=['PyQt6', 'PyQt6.QtWidgets', 'PyQt6.QtGui', 'PyQt6.QtCore', 'highlighter', 'token_panel', 'iconos'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

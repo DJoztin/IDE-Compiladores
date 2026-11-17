@@ -18,7 +18,7 @@
 | 3 | Árbol válido | pestaña **Sintactico** (árbol) y **Semantico** (árbol anotado); **Errores Semanticos** dice `(sin errores)` | árbol y tabla de símbolos llenos |
 | 4 | Generar `.tm` | ya lo hizo F8: `programa.tm` y `programa.ci` quedan junto al fuente | — |
 | 5 | Ver el `.tm` y el `.ci` | pestaña **Código Intermedio** → sub-pestaña **Código TM (.tm)**: vista *Tabla* (Dir · Instrucción · Operandos · Comentario) o *Archivo* (el texto tal cual, estilo TINY). Sub-pestaña **Código intermedio de tres direcciones (.ci)** | direcciones, instrucciones y operandos |
-| 6 | Ejecutar en la TM | **F9** (o ▶ Ejecutar). Recompila y carga en la TM el `.tm` recién generado. Cuando aparece `Ingrese un numero (IN):` escribir el valor en la línea de abajo y **Enter** | pestaña **Máquina TM (ejecución)** |
+| 6 | Ejecutar en la TM | **F9** (o el botón Ejecutar). Recompila y carga en la TM el `.tm` recién generado. Cuando aparece `Ingrese un numero (IN) - <qué se pide>:` escribir el valor en la línea de abajo y **Enter**. Si el valor no es válido, el programa avisa y lo vuelve a pedir | pestaña **Máquina TM (ejecución)** |
 | 7 | Comprobar el resultado | `Resultado del programa (OUT): …` y `Ejecucion finalizada (HALT)`; a la derecha registros y memoria de variables | valores finales de cada variable |
 
 Extras que se pueden mostrar si la docente lo pide (en la línea de comandos de la TM, igual que `tm.exe`):
@@ -38,8 +38,9 @@ Programa A — `pruebas/oro/factorial.txt`:
 - [ ] Botón **Paso** avanza una instrucción y resalta su fila.
 
 Programa B — `pruebas/programas/13_votos.txt` (reales y varias entradas):
-- [ ] F9 con entradas `1 2 2 4 1 2 3 2 0` → `2 4 1 1 25.0 50.0 12.5 12.5`.
-- [ ] Escribir `abc` cuando pide IN → `Illegal value` y vuelve a pedir.
+- [ ] F9 con entradas `1 2 2 4 1 2 3 2 0` → `2 4 1 1 25.0 50.0 12.5 12.5`, cada uno con su etiqueta.
+- [ ] Cada IN dice qué se pide (`Voto (candidato 1, 2, 3 o 4; 0 = fin)`).
+- [ ] Escribir `7` → `Voto invalido…` y lo vuelve a pedir; escribir `abc` → `Illegal value`; escribir `2.5` → `se esperaba un numero entero`.
 
 Errores y coherencia:
 - [ ] Cambiar `cout(fact)` por `cout(z)` y F8 → no hay código, pestaña Errores Semanticos abierta, el `.tm` viejo se borró.

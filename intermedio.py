@@ -61,6 +61,9 @@ def _sentencias(ctx: _ContextoIR, n):
     k = n.tipo
     if k == "declaracion":
         return
+    if k == "mensaje":
+        ctx.emit(f'write "{n.valor}"')
+        return
     if k == "cin_stmt":
         ctx.emit(f"read {n.id_nombre}")
     elif k == "cout_stmt":

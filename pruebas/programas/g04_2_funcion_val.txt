@@ -1,9 +1,10 @@
 main() {
-    /* G4-2: VAL = 100*V si NUM=1; 100^V si NUM=2; 100/V si NUM=3; 0 en otro caso */
+    /* G4-2 (selectivo): VAL = 100*V si NUM=1; 100^V si NUM=2;
+       100/V si NUM=3; 0 para cualquier otro valor de NUM */
     int num, v;
     float val;
-    cin(num);
-    cin(v);
+    cin("NUM (1, 2, 3 u otro valor)", num);
+    cin("V (entero)", v);
     if (num == 1) then
         val = 100 * v;
     else
@@ -14,6 +15,7 @@ main() {
                 if (v != 0) then
                     val = 100.0 / v;
                 else
+                    cout "V no puede ser 0 cuando NUM = 3 (se toma VAL = 0)";
                     val = 0;
                 end;
             else
@@ -21,5 +23,5 @@ main() {
             end;
         end;
     end;
-    cout val;
+    cout "VAL", val;
 }

@@ -1,12 +1,57 @@
 main() {
-    /* G4-5, G10-5, G12-5: precios P1..P5; ventas CLAVE, CANT hasta -1, -1 */
+    /* G4-5, G10-5, G12-5 (repetitivo): precios P1..P5 y ventas
+       (CLAVE, CANT) hasta -1, -1. Por venta: clave, cantidad e importe.
+       Al final: boletos vendidos de cada tipo y recaudacion total. */
     float p1, p2, p3, p4, p5, precio, importe, total;
     int clave, cant, b1, b2, b3, b4, b5;
-    cin(p1); cin(p2); cin(p3); cin(p4); cin(p5);
+    do {
+        cin("Precio de la localidad 1 ($, > 0)", p1);
+        if (p1 <= 0) then
+            cout "El precio debe ser mayor a 0";
+        end;
+    } until (p1 > 0);
+    do {
+        cin("Precio de la localidad 2 ($, > 0)", p2);
+        if (p2 <= 0) then
+            cout "El precio debe ser mayor a 0";
+        end;
+    } until (p2 > 0);
+    do {
+        cin("Precio de la localidad 3 ($, > 0)", p3);
+        if (p3 <= 0) then
+            cout "El precio debe ser mayor a 0";
+        end;
+    } until (p3 > 0);
+    do {
+        cin("Precio de la localidad 4 ($, > 0)", p4);
+        if (p4 <= 0) then
+            cout "El precio debe ser mayor a 0";
+        end;
+    } until (p4 > 0);
+    do {
+        cin("Precio de la localidad 5 ($, > 0)", p5);
+        if (p5 <= 0) then
+            cout "El precio debe ser mayor a 0";
+        end;
+    } until (p5 > 0);
     b1 = 0; b2 = 0; b3 = 0; b4 = 0; b5 = 0;
     total = 0;
-    cin(clave);
-    cin(cant);
+    do {
+        cin("Clave de la localidad (1 a 5, -1 = terminar)", clave);
+        if (clave < -1 || clave == 0 || clave > 5) then
+            cout "Clave invalida: usa 1 a 5, o -1 para terminar";
+        end;
+    } until (clave >= 1 && clave <= 5 || clave == -1);
+    if (clave == -1) then
+        cin("Fin de datos: escribe -1", cant);
+    else
+        do {
+            cin("Cantidad de boletos (>= 1)", cant);
+            if (cant < 1) then
+                cout "La cantidad debe ser 1 o mayor";
+            end;
+        } until (cant >= 1);
+    end;
     while (clave != -1) {
         precio = 0;
         if (clave == 1) then precio = p1; b1 = b1 + cant; end;
@@ -15,13 +60,31 @@ main() {
         if (clave == 4) then precio = p4; b4 = b4 + cant; end;
         if (clave == 5) then precio = p5; b5 = b5 + cant; end;
         importe = precio * cant;
-        cout clave;
-        cout cant;
-        cout importe;
+        cout "Clave", clave;
+        cout "Cantidad", cant;
+        cout "Importe de la venta ($)", importe;
         total = total + importe;
-        cin(clave);
-        cin(cant);
+        do {
+            cin("Clave de la localidad (1 a 5, -1 = terminar)", clave);
+            if (clave < -1 || clave == 0 || clave > 5) then
+                cout "Clave invalida: usa 1 a 5, o -1 para terminar";
+            end;
+        } until (clave >= 1 && clave <= 5 || clave == -1);
+        if (clave == -1) then
+            cin("Fin de datos: escribe -1", cant);
+        else
+            do {
+                cin("Cantidad de boletos (>= 1)", cant);
+                if (cant < 1) then
+                    cout "La cantidad debe ser 1 o mayor";
+                end;
+            } until (cant >= 1);
+        end;
     };
-    cout b1; cout b2; cout b3; cout b4; cout b5;
-    cout total;
+    cout "Boletos localidad 1", b1;
+    cout "Boletos localidad 2", b2;
+    cout "Boletos localidad 3", b3;
+    cout "Boletos localidad 4", b4;
+    cout "Boletos localidad 5", b5;
+    cout "Recaudacion total ($)", total;
 }

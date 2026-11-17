@@ -1,0 +1,14 @@
+main() {
+    /* G6-2 (selectivo): aprobado = 1 si la calificacion es >= 8, reprobado = 0 */
+    float cal;
+    cin("Calificacion del examen (0 a 10)", cal);
+    if (cal < 0 || cal > 10) then
+        cout "La calificacion debe estar entre 0 y 10";
+    else
+        if (cal >= 8) then
+            cout "Aprobado", 1;
+        else
+            cout "Reprobado", 0;
+        end;
+    end;
+}

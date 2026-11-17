@@ -1,6 +1,6 @@
 main() {
-    /* G1-5, G9-5, G11-5: por cada mes (1..12) se leen las lluvias de
-       NORTE, CENTRO y SUR. Imprime: promedio anual del centro, mes y
+    /* G1-5, G9-5, G11-5 (repetitivo): lluvias de NORTE, CENTRO y SUR
+       en cada mes (1..12). Imprime: promedio anual del centro, mes y
        registro con menor lluvia en el sur, region con mayor lluvia anual
        (1 = norte, 2 = centro, 3 = sur). */
     int mes, mesmin, region;
@@ -8,9 +8,25 @@ main() {
     tn = 0; tc = 0; ts = 0;
     mes = 1;
     while (mes <= 12) {
-        cin(n);
-        cin(c);
-        cin(s);
+        cout "Mes", mes;
+        do {
+            cin("Lluvia NORTE (>= 0)", n);
+            if (n < 0) then
+                cout "La lluvia no puede ser negativa";
+            end;
+        } until (n >= 0);
+        do {
+            cin("Lluvia CENTRO (>= 0)", c);
+            if (c < 0) then
+                cout "La lluvia no puede ser negativa";
+            end;
+        } until (c >= 0);
+        do {
+            cin("Lluvia SUR (>= 0)", s);
+            if (s < 0) then
+                cout "La lluvia no puede ser negativa";
+            end;
+        } until (s >= 0);
         tn = tn + n;
         tc = tc + c;
         ts = ts + s;
@@ -26,9 +42,9 @@ main() {
         mes++;
     };
     prom = tc / 12;
-    cout prom;
-    cout mesmin;
-    cout smin;
+    cout "Promedio anual region CENTRO", prom;
+    cout "Mes con menor lluvia en el SUR", mesmin;
+    cout "Registro de ese mes", smin;
     if (tn > tc && tn > ts) then
         region = 1;
     else
@@ -38,5 +54,5 @@ main() {
             region = 3;
         end;
     end;
-    cout region;
+    cout "Region con mayor lluvia (1 norte, 2 centro, 3 sur)", region;
 }

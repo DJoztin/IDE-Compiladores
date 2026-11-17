@@ -1,9 +1,9 @@
 main() {
-    /* G7-1, G12-1: (A + B)^2 / 3 */
+    /* G7-1, G12-1 (secuencial): (A + B)^2 / 3 */
     int a, b;
     float r;
-    cin(a);
-    cin(b);
+    cin("Dato A (entero)", a);
+    cin("Dato B (entero)", b);
     r = (a + b) ^ 2 / 3.0;
-    cout r;
+    cout "(A + B)^2 / 3", r;
 }

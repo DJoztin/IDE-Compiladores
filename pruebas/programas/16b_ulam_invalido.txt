@@ -1,0 +1,19 @@
+main() {
+    /* G11-4 (repetitivo): sucesion de ULAM (par: /2 ; impar: *3 + 1) */
+    int n;
+    do {
+        cin("Entero positivo para iniciar (>= 1)", n);
+        if (n < 1) then
+            cout "Debe ser un entero positivo";
+        end;
+    } until (n >= 1);
+    cout "Termino", n;
+    while (n != 1) {
+        if (n % 2 == 0) then
+            n = n / 2;
+        else
+            n = 3 * n + 1;
+        end;
+        cout "Termino", n;
+    };
+}

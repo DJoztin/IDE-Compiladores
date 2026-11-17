@@ -1,13 +1,14 @@
 main() {
+    /* G2-1 (secuencial): ID y promedio de 5 calificaciones */
     int id;
     float c1, c2, c3, c4, c5, prom;
-    cin(id);
-    cin(c1);
-    cin(c2);
-    cin(c3);
-    cin(c4);
-    cin(c5);
+    cin("Matricula (ID) del alumno", id);
+    cin("Calificacion 1", c1);
+    cin("Calificacion 2", c2);
+    cin("Calificacion 3", c3);
+    cin("Calificacion 4", c4);
+    cin("Calificacion 5", c5);
     prom = (c1 + c2 + c3 + c4 + c5) / 5;
-    cout id;
-    cout prom;
+    cout "Matricula", id;
+    cout "Promedio", prom;
 }

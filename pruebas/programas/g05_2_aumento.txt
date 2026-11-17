@@ -1,11 +1,15 @@
 main() {
-    /* G5-2: aumento del 15% si el sueldo es menor a $1000, 12% si no */
+    /* G5-2 (selectivo): +15% si el sueldo es menor a $1000, +12% si no */
     float sueldo;
-    cin(sueldo);
-    if (sueldo < 1000) then
-        sueldo = sueldo * 1.15;
+    cin("Sueldo del trabajador ($)", sueldo);
+    if (sueldo < 0) then
+        cout "El sueldo no puede ser negativo";
     else
-        sueldo = sueldo * 1.12;
+        if (sueldo < 1000) then
+            sueldo = sueldo * 1.15;
+        else
+            sueldo = sueldo * 1.12;
+        end;
+        cout "Nuevo sueldo ($)", sueldo;
     end;
-    cout sueldo;
 }

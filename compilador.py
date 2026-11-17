@@ -413,8 +413,12 @@ class AnalizadorSintactico:
                        ('else' lista_sent)? 'end' ';'
       do_until       → 'do' '{' lista_sent '}' 'until' '(' condicion ')' ';'
       while_stmt     → 'while' '(' condicion ')' '{' lista_sent '}' ';'
-      cin_stmt       → 'cin' '(' ID ')' ';'
+      cin_stmt       → 'cin' '(' (CADENA ',')? ID ')' ';'
       cout_stmt      → 'cout' expresion ';'
+                     | 'cout' CADENA (',' expresion)? ';'
+                     | 'cout' '(' CADENA (',' expresion)? ')' ';'
+      (la CADENA es sólo texto para el usuario: indicación de lo que se
+       pide en cin, etiqueta del resultado o mensaje suelto en cout)
       condicion      → expr_rel (('&&'|'||') expr_rel)*
       expr_rel       → expresion (OP_REL expresion)?
       expresion      → termino (('+' | '-') termino)*
@@ -636,14 +640,31 @@ class AnalizadorSintactico:
         self._consumir(TK_SIMBOLO, ";")
         return n
 
+    def _tok_sig(self, k=1):
+        i = self.pos + k
+        return self.tokens[i] if i < len(self.tokens) else None
+
+    @staticmethod
+    def _texto(tok) -> str:
+        """Contenido de una CADENA sin comillas (en una sola línea)."""
+        v = tok.valor
+        if len(v) >= 2 and v[0] == v[-1] == '"':
+            v = v[1:-1]
+        return v.replace("|", "/").strip()
+
     def _cin_stmt(self) -> NodoSint:
         n = NodoSint("cin_stmt", "cin")
         t = self._consumir(TK_RESERVADA, "cin")
         if t: n.linea, n.columna = t.linea, t.columna
         self._consumir(TK_SIMBOLO, "(")
+        n.mensaje = ""
+        if self._espera(TK_CADENA):                 # cin("indicación", x);
+            n.mensaje = self._texto(self._consumir(TK_CADENA))
+            self._consumir(TK_SIMBOLO, ",")
         t = self._consumir(TK_IDENTIFICADOR)
         if t:
-            n.valor = f"cin({t.valor})"
+            n.valor = (f'cin("{n.mensaje}", {t.valor})' if n.mensaje
+                       else f"cin({t.valor})")
             n.id_nombre = t.valor
             n.id_columna = t.columna
         self._consumir(TK_SIMBOLO, ")")
@@ -654,6 +675,24 @@ class AnalizadorSintactico:
         n = NodoSint("cout_stmt", "cout")
         t = self._consumir(TK_RESERVADA, "cout")
         if t: n.linea, n.columna = t.linea, t.columna
+        n.etiqueta = ""
+        con_par = (self._espera(TK_SIMBOLO, "(") and self._tok_sig()
+                   and self._tok_sig().tipo == TK_CADENA)
+        if con_par or self._espera(TK_CADENA):
+            if con_par:
+                self._consumir(TK_SIMBOLO, "(")
+            texto = self._texto(self._consumir(TK_CADENA))
+            if self._espera(TK_SIMBOLO, ","):       # cout "etiqueta", expr;
+                self._consumir(TK_SIMBOLO, ",")
+                n.etiqueta = texto
+                n.valor = f'cout "{texto}"'
+                n.agregar(self._expresion())
+            else:                                   # cout "mensaje";
+                n = NodoSint("mensaje", texto, n.linea, n.columna)
+            if con_par:
+                self._consumir(TK_SIMBOLO, ")")
+            self._consumir(TK_SIMBOLO, ";")
+            return n
         n.agregar(self._expresion())
         self._consumir(TK_SIMBOLO, ";")
         return n

@@ -1,0 +1,84 @@
+# CODIGO INTERMEDIO DE TRES DIRECCIONES
+# Generado desde el arbol anotado, en paralelo con el codigo TM.
+# Los temporales t1, t2... y etiquetas L1, L2... son simbolicos.
+
+t1 = (float) 0
+total = t1
+locales = 0
+label L1
+read tipo
+t2 = tipo < 0
+t3 = tipo > 3
+t4 = t2 || t3
+if_false t4 goto L2
+write "Tipo invalido: usa 1, 2, 3 o 0"
+label L2
+t5 = tipo >= 0
+t6 = tipo <= 3
+t7 = t5 && t6
+if_false t7 goto L1
+label L3
+t8 = tipo != 0
+if_false t8 goto L4
+label L5
+read minutos
+t9 = minutos < 1
+if_false t9 goto L6
+write "La duracion debe ser de 1 minuto o mas"
+label L6
+t10 = minutos >= 1
+if_false t10 goto L5
+t11 = (float) 0
+costo = t11
+t12 = tipo == 1
+if_false t12 goto L7
+costo = 7.59
+t13 = minutos > 3
+if_false t13 goto L8
+t14 = minutos - 3
+t15 = (float) t14
+t16 = t15 * 3.03
+t17 = costo + t16
+costo = t17
+label L8
+label L7
+t18 = tipo == 2
+if_false t18 goto L9
+costo = 1.20
+t19 = minutos > 3
+if_false t19 goto L10
+t20 = minutos - 3
+t21 = (float) t20
+t22 = t21 * 0.48
+t23 = costo + t22
+costo = t23
+label L10
+label L9
+t24 = tipo == 3
+if_false t24 goto L11
+t25 = locales + 1
+locales = t25
+t26 = locales > 50
+if_false t26 goto L12
+costo = 0.60
+label L12
+label L11
+write costo
+t27 = total + costo
+total = t27
+label L13
+read tipo
+t28 = tipo < 0
+t29 = tipo > 3
+t30 = t28 || t29
+if_false t30 goto L14
+write "Tipo invalido: usa 1, 2, 3 o 0"
+label L14
+t31 = tipo >= 0
+t32 = tipo <= 3
+t33 = t31 && t32
+if_false t33 goto L13
+goto L3
+label L4
+write total
+halt

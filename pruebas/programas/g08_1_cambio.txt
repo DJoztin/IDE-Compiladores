@@ -1,8 +1,8 @@
 main() {
-    /* G8-1, G11-1: cambio = dinero entregado - costo */
+    /* G8-1, G11-1 (secuencial): cambio = dinero entregado - costo */
     float costo, dinero, cambio;
-    cin(costo);
-    cin(dinero);
+    cin("Costo del articulo ($)", costo);
+    cin("Dinero entregado por el cliente ($)", dinero);
     cambio = dinero - costo;
-    cout cambio;
+    cout "Cambio a entregar ($)", cambio;
 }

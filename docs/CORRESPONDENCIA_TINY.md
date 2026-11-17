@@ -137,5 +137,24 @@ r = t2
 Sin la conversión, `7 / 2` daría la división entera `3`; por eso se aplica en **todo**
 nodo marcado con `conv` y después de cada `IN` a una variable float.
 
-**Limitación conocida:** la TM no conoce el tipo de la variable destino de un `IN`; si se
-teclea `2.5` cuando el programa lee una variable `int`, la TM guarda `2.5`.
+Para saber si un `IN` espera un entero, la TM del IDE lee el comentario de la instrucción
+(`read integer value: x` o `read real value: x`); si espera un entero y se teclea `2.5`,
+responde `Illegal value: se esperaba un numero entero` y vuelve a pedir.
+
+---
+
+## 6. Textos para el usuario (también sin opcodes nuevos)
+
+El lenguaje admite textos sólo como ayuda para quien ejecuta el programa:
+
+| Fuente | Instrucción TM generada | Lo que muestra la TM del IDE |
+|---|---|---|
+| `cin("Minutos (>= 1)", minutos);` | `IN 0,0,0   read integer value: minutos \| Minutos (>= 1)` | `Ingrese un numero (IN) - Minutos (>= 1):` |
+| `cin(minutos);` | `IN 0,0,0   read integer value: minutos` | `Ingrese un numero (IN) - minutos (int):` |
+| `cout "Costo ($)", costo;` | `OUT 0,0,0   write ac: costo \| Costo ($)` | `Resultado del programa (OUT): 13.65   <- Costo ($)` |
+| `cout "Clave invalida";` | `LDA 0,0(0)   msg: Clave invalida` | `Clave invalida` |
+
+Los textos viajan **en el comentario** de la instrucción. `LDA 0,0(0)` calcula `ac = 0 + ac`,
+o sea, no cambia nada: es una instrucción que ya existe usada como "no-op" para colgar el
+mensaje. El `tm.c` de la docente ignora los comentarios, así que el mismo `.tm` se ejecuta
+igual allá (sólo que sin los textos). En el `.ci` el mensaje aparece como `write "texto"`.

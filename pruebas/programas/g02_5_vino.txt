@@ -1,20 +1,55 @@
 main() {
-    /* G2-5, G5-5, G8-5: N anios; por anio los litros de los 5 tipos.
-       Imprime el total de cada anio (dentro del ciclo), luego el total de
-       cada tipo, el anio y los litros del maximo del tipo 2, y el primer
-       anio sin produccion del tipo 3 (0 si no existe). */
+    /* G2-5, G5-5, G8-5 (repetitivo): N anios; por anio los litros de los 5
+       tipos de vino. Imprime el total de cada anio, el total de cada tipo,
+       el anio y litros del maximo del tipo 2, y el primer anio sin vino
+       tipo 3 (0 si no hubo). */
     int n, anio, anio2, anio3;
     float v1, v2, v3, v4, v5, t1, t2, t3, t4, t5, ta, max2;
-    cin(n);
+    do {
+        cin("Numero de anios N (>= 1)", n);
+        if (n < 1) then
+            cout "N debe ser 1 o mayor";
+        end;
+    } until (n >= 1);
     t1 = 0; t2 = 0; t3 = 0; t4 = 0; t5 = 0;
     anio3 = 0;
     anio = 1;
     while (anio <= n) {
-        cin(v1); cin(v2); cin(v3); cin(v4); cin(v5);
+        cout "Anio", anio;
+        do {
+            cin("Litros del vino tipo 1 (>= 0)", v1);
+            if (v1 < 0) then
+                cout "Los litros no pueden ser negativos";
+            end;
+        } until (v1 >= 0);
+        do {
+            cin("Litros del vino tipo 2 (>= 0)", v2);
+            if (v2 < 0) then
+                cout "Los litros no pueden ser negativos";
+            end;
+        } until (v2 >= 0);
+        do {
+            cin("Litros del vino tipo 3 (>= 0)", v3);
+            if (v3 < 0) then
+                cout "Los litros no pueden ser negativos";
+            end;
+        } until (v3 >= 0);
+        do {
+            cin("Litros del vino tipo 4 (>= 0)", v4);
+            if (v4 < 0) then
+                cout "Los litros no pueden ser negativos";
+            end;
+        } until (v4 >= 0);
+        do {
+            cin("Litros del vino tipo 5 (>= 0)", v5);
+            if (v5 < 0) then
+                cout "Los litros no pueden ser negativos";
+            end;
+        } until (v5 >= 0);
         t1 = t1 + v1; t2 = t2 + v2; t3 = t3 + v3;
         t4 = t4 + v4; t5 = t5 + v5;
         ta = v1 + v2 + v3 + v4 + v5;
-        cout ta;
+        cout "Total producido en el anio", ta;
         if (anio == 1) then
             max2 = v2;
             anio2 = 1;
@@ -29,8 +64,12 @@ main() {
         end;
         anio++;
     };
-    cout t1; cout t2; cout t3; cout t4; cout t5;
-    cout anio2;
-    cout max2;
-    cout anio3;
+    cout "Total del tipo 1", t1;
+    cout "Total del tipo 2", t2;
+    cout "Total del tipo 3", t3;
+    cout "Total del tipo 4", t4;
+    cout "Total del tipo 5", t5;
+    cout "Anio con mas litros del tipo 2", anio2;
+    cout "Litros del tipo 2 en ese anio", max2;
+    cout "Anio sin produccion del tipo 3 (0 = ninguno)", anio3;
 }

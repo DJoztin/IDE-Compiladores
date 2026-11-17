@@ -1,9 +1,15 @@
 main() {
+    /* G5-4 (repetitivo): el mayor y el menor de N enteros */
     int n, i, x, mayor, menor;
-    cin(n);
+    do {
+        cin("Cuantos numeros (N >= 1)", n);
+        if (n < 1) then
+            cout "N debe ser 1 o mayor";
+        end;
+    } until (n >= 1);
     i = 0;
     while (i < n) {
-        cin(x);
+        cin("Numero entero", x);
         if (i == 0) then
             mayor = x;
             menor = x;
@@ -17,6 +23,6 @@ main() {
         end;
         i++;
     };
-    cout mayor;
-    cout menor;
+    cout "Mayor", mayor;
+    cout "Menor", menor;
 }

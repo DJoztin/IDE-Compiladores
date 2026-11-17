@@ -1,6 +1,12 @@
 main() {
+    /* G10-4 (repetitivo): numeros perfectos menores o iguales que N */
     int lim, n, d, suma;
-    cin(lim);
+    do {
+        cin("N (entero >= 1)", lim);
+        if (lim < 1) then
+            cout "N debe ser 1 o mayor";
+        end;
+    } until (lim >= 1);
     n = 2;
     while (n <= lim) {
         suma = 0;
@@ -12,7 +18,7 @@ main() {
             d++;
         };
         if (suma == n) then
-            cout n;
+            cout "Numero perfecto", n;
         end;
         n++;
     };

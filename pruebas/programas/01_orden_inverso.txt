@@ -1,11 +1,12 @@
 main() {
+    /* G1-1 (secuencial): A, B, C y D en orden inverso */
     int a, b, c, d;
-    cin(a);
-    cin(b);
-    cin(c);
-    cin(d);
-    cout d;
-    cout c;
-    cout b;
-    cout a;
+    cin("Dato A (entero)", a);
+    cin("Dato B (entero)", b);
+    cin("Dato C (entero)", c);
+    cin("Dato D (entero)", d);
+    cout "D", d;
+    cout "C", c;
+    cout "B", b;
+    cout "A", a;
 }

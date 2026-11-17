@@ -27,6 +27,20 @@ class ErrorGeneracion(Exception):
     pass
 
 
+def texto_expr(n) -> str:
+    """Texto de una expresión del árbol (para los comentarios del .tm)."""
+    k = n.tipo
+    if k in ("entero", "real_lit", "booleano", "identificador"):
+        return n.valor
+    if k == "factor_par":
+        return "(" + texto_expr(n.hijos[0]) + ")"
+    if k == "negativo":
+        return "-" + texto_expr(n.hijos[0])
+    if len(n.hijos) == 2:
+        return f"{texto_expr(n.hijos[0])} {n.valor} {texto_expr(n.hijos[1])}"
+    return n.valor
+
+
 class GeneradorTM:
 
     def __init__(self, tabla, emisor: EmisorTM | None = None):
@@ -103,8 +117,14 @@ class GeneradorTM:
     def _s_cin_stmt(self, n):
         e = self.e
         nombre = n.id_nombre
-        e.emit_ro("IN", AC, 0, 0, "read integer value" if not self._es_float(nombre)
-                  else "read real value")
+        # El comentario lleva el nombre de la variable y la indicación para el
+        # usuario. La TM de Louden ignora los comentarios; la nuestra los usa
+        # sólo para mostrar qué se pide y validar que un int sea entero.
+        c = ("read real value: " if self._es_float(nombre)
+             else "read integer value: ") + nombre
+        if getattr(n, "mensaje", ""):
+            c += " | " + n.mensaje
+        e.emit_ro("IN", AC, 0, 0, c)
         if self._es_float(nombre):
             e.emit_rm("LDC", AC1, 1.0, 0, "conv: load 1.0")
             e.emit_ro("MUL", AC, AC, AC1, "conv int->float")
@@ -112,7 +132,15 @@ class GeneradorTM:
 
     def _s_cout_stmt(self, n):
         self.expr(n.hijos[0])
-        self.e.emit_ro("OUT", AC, 0, 0, "write ac")
+        c = "write ac: " + texto_expr(n.hijos[0])
+        if getattr(n, "etiqueta", ""):
+            c += " | " + n.etiqueta
+        self.e.emit_ro("OUT", AC, 0, 0, c)
+
+    def _s_mensaje(self, n):
+        # cout "texto";  →  LDA 0,0(0) no altera nada (ac = 0 + ac);
+        # el texto va en el comentario y la TM del IDE lo muestra.
+        self.e.emit_rm("LDA", AC, 0, AC, "msg: " + n.valor)
 
     def _s_if_stmt(self, n):
         e = self.e

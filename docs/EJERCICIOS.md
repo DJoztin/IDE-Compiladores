@@ -1,13 +1,12 @@
 # Ejercicios finales — programa listo para cada grupo
 
-Cada ejercicio de `referencia/EjericiosFinalesCompisII.pdf` (12 grupos) tiene su programa en `pruebas/programas/`,
-con un archivo `.in` (entradas de ejemplo) y un `.esperado` (salida esperada, calculada a mano).
-`python pruebas/run_tests.py` comprueba todos: la salida de la TM debe coincidir con la esperada y con el oráculo.
+Cada ejercicio de `referencia/EjericiosFinalesCompisII.pdf` (12 grupos) tiene su programa en `pruebas/programas/`, con un `.in` (entradas de ejemplo) y un `.esperado` (salida esperada, calculada a mano). `python pruebas/run_tests.py` los comprueba todos: la salida de la TM debe coincidir con la esperada y con el oráculo.
 
-Como la TM sólo imprime números, las respuestas de texto van codificadas como números (igual que en el PDF: positivo=0, Aceptado=1…).
-Las variantes `b`, `c` del mismo nombre prueban otras ramas del mismo programa.
+Cada `cin` dice qué se pide (con las opciones válidas) y cada `cout` lleva una etiqueta. Las respuestas siguen siendo números, como pide el PDF (positivo = 0, Aceptado = 1…).
 
-Para la revisión: abrir el `.txt` en el IDE, **F8** para ver el código y **F9** para ejecutarlo, tecleando las entradas del `.in`.
+**Validación:** en los ejercicios repetitivos (4 y 5) un dato inválido se avisa y se vuelve a pedir con `do … until`; en los selectivos (2 y 3) se avisa con un mensaje dentro del `if` (sin agregar ciclos, para respetar la estructura pedida).
+
+Para la revisión: abrir el `.txt` en el IDE, **F8** para ver el código y **F9** para ejecutarlo, tecleando las entradas del `.in`. Los archivos con sufijo `b`, `c` son el mismo programa con otras entradas (otras ramas o datos inválidos).
 
 ## Grupo 1
 
@@ -17,7 +16,7 @@ Para la revisión: abrir el `.txt` en el IDE, **F8** para ver el código y **F9*
 | 2 | Positivo=0, negativo=1, nulo=2 | selectivo | `02_signo.txt` | -8 | 1 |
 | 3 | Orden creciente=1, 0=No | selectivo | `03_creciente.txt` | 3 7 9 | 1 |
 | 4 | Término N de Fibonacci | repetitivo | `04_fibonacci.txt` | 10 | 34 |
-| 5 | Lluvias NORTE/CENTRO/SUR | repetitivo | `g01_5_lluvias.txt` | 10 1 19 10 2 18 10 3 17 10 4 16 10 5 15 10 6 14 10 7 2.5 … | 6.5 7 2.5 3 |
+| 5 | Lluvias NORTE/CENTRO/SUR | repetitivo | `g01_5_lluvias.txt` | 10 1 19 10 2 18 10 3 17 10 4 16 10 5 15 10 6 14 10 7 2.5 … | 1 2 3 4 5 6 7 8 9 10 11 12 6.5 7 2.5 3 |
 
 ## Grupo 2
 
@@ -27,7 +26,7 @@ Para la revisión: abrir el `.txt` en el IDE, **F8** para ver el código y **F9*
 | 2 | Grillo T = h/4 + 40 | selectivo | `06_grillo.txt` | 100 | 65.0 |
 | 3 | Impuesto por tramos | selectivo | `07_impuesto.txt` | 100 | 130.0 |
 | 4 | Llamadas telefónicas | repetitivo | `g02_4_llamadas.txt` | 1 5 2 2 2 10 3 4 0 | 13.65 1.2 4.56 0.0 19.41 |
-| 5 | Bodega de vinos | repetitivo | `g02_5_vino.txt` | 3 10 20 5 1 2 4 50 0 3 3 6 30 0 2 1 | 38.0 60.0 39.0 20.0 100.0 5.0 6.0 6.0 2 50.0 2 |
+| 5 | Bodega de vinos | repetitivo | `g02_5_vino.txt` | 3 10 20 5 1 2 4 50 0 3 3 6 30 0 2 1 | 1 38.0 2 60.0 3 39.0 20.0 100.0 5.0 6.0 6.0 2 50.0 2 |
 
 ## Grupo 3
 
@@ -57,7 +56,7 @@ Para la revisión: abrir el `.txt` en el IDE, **F8** para ver el código y **F9*
 | 2 | Aumento 15% / 12% | selectivo | `g05_2_aumento.txt` | 800 | 920.0 |
 | 3 | Facultades menores | selectivo | `g05_3_facultades.txt` | 12345 2 7 9.1 | 12345 2 1 |
 | 4 | Mayor y menor de N enteros | repetitivo | `09_mayor_menor.txt` | 5 4 -2 17 3 8 | 17 -2 |
-| 5 | Bodega de vinos | repetitivo | `g02_5_vino.txt` | 3 10 20 5 1 2 4 50 0 3 3 6 30 0 2 1 | 38.0 60.0 39.0 20.0 100.0 5.0 6.0 6.0 2 50.0 2 |
+| 5 | Bodega de vinos | repetitivo | `g02_5_vino.txt` | 3 10 20 5 1 2 4 50 0 3 3 6 30 0 2 1 | 1 38.0 2 60.0 3 39.0 20.0 100.0 5.0 6.0 6.0 2 50.0 2 |
 
 ## Grupo 6
 
@@ -87,7 +86,7 @@ Para la revisión: abrir el `.txt` en el IDE, **F8** para ver el código y **F9*
 | 2 | P^3 + Q^4 − 2·P^2 < 680 | selectivo | `g08_2_expresion_pq.txt` | 3 4 | 1 |
 | 3 | Descuento por monto | selectivo | `g08_3_descuento.txt` | 800 | 760.0 |
 | 4 | Ceros hasta −1 | repetitivo | `12_ceros_centinela.txt` | 0 5 0 0 3 -1 | 3 |
-| 5 | Bodega de vinos | repetitivo | `g02_5_vino.txt` | 3 10 20 5 1 2 4 50 0 3 3 6 30 0 2 1 | 38.0 60.0 39.0 20.0 100.0 5.0 6.0 6.0 2 50.0 2 |
+| 5 | Bodega de vinos | repetitivo | `g02_5_vino.txt` | 3 10 20 5 1 2 4 50 0 3 3 6 30 0 2 1 | 1 38.0 2 60.0 3 39.0 20.0 100.0 5.0 6.0 6.0 2 50.0 2 |
 
 ## Grupo 9
 
@@ -97,7 +96,7 @@ Para la revisión: abrir el `.txt` en el IDE, **F8** para ver el código y **F9*
 | 2 | Grillo T = h/4 + 40 | selectivo | `06_grillo.txt` | 100 | 65.0 |
 | 3 | Impuesto por tramos | selectivo | `07_impuesto.txt` | 100 | 130.0 |
 | 4 | Primos menores que M (y cuántos) | repetitivo | `14_primos.txt` | 20 | 2 3 5 7 11 13 17 19 8 |
-| 5 | Lluvias NORTE/CENTRO/SUR | repetitivo | `g01_5_lluvias.txt` | 10 1 19 10 2 18 10 3 17 10 4 16 10 5 15 10 6 14 10 7 2.5 … | 6.5 7 2.5 3 |
+| 5 | Lluvias NORTE/CENTRO/SUR | repetitivo | `g01_5_lluvias.txt` | 10 1 19 10 2 18 10 3 17 10 4 16 10 5 15 10 6 14 10 7 2.5 … | 1 2 3 4 5 6 7 8 9 10 11 12 6.5 7 2.5 3 |
 
 ## Grupo 10
 
@@ -117,7 +116,7 @@ Para la revisión: abrir el `.txt` en el IDE, **F8** para ver el código y **F9*
 | 2 | Aumento por categoría | selectivo | `g10_2_categoria.txt` | 3 1000 | 3 1080.0 |
 | 3 | Llamada internacional por zona | selectivo | `g11_3_llamada_zona.txt` | 18 10 | 45.0 |
 | 4 | Sucesión de ULAM | repetitivo | `16_ulam.txt` | 26 | 26 13 40 20 10 5 16 8 4 2 1 |
-| 5 | Lluvias NORTE/CENTRO/SUR | repetitivo | `g01_5_lluvias.txt` | 10 1 19 10 2 18 10 3 17 10 4 16 10 5 15 10 6 14 10 7 2.5 … | 6.5 7 2.5 3 |
+| 5 | Lluvias NORTE/CENTRO/SUR | repetitivo | `g01_5_lluvias.txt` | 10 1 19 10 2 18 10 3 17 10 4 16 10 5 15 10 6 14 10 7 2.5 … | 1 2 3 4 5 6 7 8 9 10 11 12 6.5 7 2.5 3 |
 
 ## Grupo 12
 
@@ -131,12 +130,11 @@ Para la revisión: abrir el `.txt` en el IDE, **F8** para ver el código y **F9*
 
 ## Supuestos de interpretación
 
-- **Lluvias:** por cada mes se leen tres valores (norte, centro, sur). Imprime el promedio del centro, el mes y el registro mínimos del sur, y la región con más lluvia (1 = norte, 2 = centro, 3 = sur).
-- **Llamadas (G2):** se lee tipo (1 internacional, 2 nacional, 3 local) y minutos hasta tipo 0. Los 3 primeros minutos tienen costo fijo. Las primeras 50 llamadas locales no se cobran.
-- **Vinos:** el total de cada año se imprime dentro del ciclo. Al final van los totales por tipo, el año y los litros del máximo del tipo 2, y el **primer** año sin vino tipo 3 (0 si no hubo). Sin arreglos no se pueden guardar todos los años para imprimirlos después.
-- **Fábricas:** por fábrica imprime clave, total anual y 1/0 según si julio superó 3 000 000. Al final imprime la clave y el total de la que más produjo.
-- **Función VAL (G4):** `100**V` se toma como potencia `100 ^ V`. `100 / V` es división real y con V = 0 da 0.
-- **Ventas (G4):** se lee N y luego N ventas. Imprime cantidad y suma de cada rango.
-- **Facultades (G5):** carrera 1 Economía, 2 Computación, 3 Administración, 4 Contabilidad. Si es aceptado imprime matrícula, carrera y 1; si no, 0.
-- **Llamada por zona (G11):** con una clave inválida imprime −1.
-- **Estadio:** las ventas terminan con `-1, -1` (como en el PDF). Imprime clave, cantidad e importe de cada venta, luego los boletos de cada tipo y la recaudación total.
+- **Lluvias:** por cada mes se leen tres valores (norte, centro, sur); se imprime el número de mes antes de pedirlos. Al final: promedio del centro, mes y registro mínimos del sur, y la región con más lluvia (1 = norte, 2 = centro, 3 = sur).
+- **Llamadas (G2):** tipo (1 internacional, 2 nacional, 3 local) y minutos, hasta tipo 0. Los 3 primeros minutos tienen costo fijo. Las primeras 50 llamadas locales no se cobran.
+- **Vinos:** se imprime el número de año y el total de ese año dentro del ciclo; al final, los totales por tipo, el año y los litros del máximo del tipo 2, y el **primer** año sin vino tipo 3 (0 si no hubo). Sin arreglos no se pueden guardar todos los años para imprimirlos después.
+- **Fábricas:** por fábrica: clave, total anual y 1/0 si julio superó 3 000 000. Al final: clave y total de la que más produjo.
+- **Función VAL (G4):** `100**V` se toma como potencia `100 ^ V`; `100 / V` es división real y con V = 0 avisa y da 0.
+- **Ventas (G4):** se lee N y luego N ventas; se imprime cantidad y suma de cada rango.
+- **Facultades (G5):** carrera 1 Economía, 2 Computación, 3 Administración, 4 Contabilidad.
+- **Estadio:** las ventas terminan con `-1, -1` (como en el PDF).

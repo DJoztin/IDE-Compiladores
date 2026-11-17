@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QColor, QFont, QBrush, QPalette
 from PyQt6.QtCore import Qt
+from iconos import icono
 
 
 # ── Colores de badge por tipo de token ─────────────────────────
@@ -216,9 +217,9 @@ class TokenPanel(QWidget):
         outer_lay.addWidget(scroll)
 
         # Botón limpiar fijo a la derecha
-        self._btn_limpiar = QPushButton("✕")
+        self._btn_limpiar = QPushButton()
+        self._btn_limpiar.setIcon(icono("limpiar", "#858585"))
         self._btn_limpiar.setFixedSize(28, 22)
-        self._btn_limpiar.setFont(QFont("Consolas", 7))
         self._btn_limpiar.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_limpiar.setToolTip("Limpiar filtros")
         self._btn_limpiar.clicked.connect(self._limpiar_filtros)

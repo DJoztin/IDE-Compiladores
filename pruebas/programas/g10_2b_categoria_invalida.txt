@@ -1,0 +1,27 @@
+main() {
+    /* G10-2, G11-2 (selectivo): aumento por categoria
+       1: 15%, 2: 10%, 3: 8%, 4: 7% */
+    int cat;
+    float sueldo;
+    cin("Categoria del trabajador (1, 2, 3 o 4)", cat);
+    cin("Sueldo actual ($)", sueldo);
+    if (cat < 1 || cat > 4 || sueldo < 0) then
+        cout "Datos invalidos: la categoria va de 1 a 4 y el sueldo no es negativo";
+    else
+        if (cat == 1) then
+            sueldo = sueldo * 1.15;
+        else
+            if (cat == 2) then
+                sueldo = sueldo * 1.10;
+            else
+                if (cat == 3) then
+                    sueldo = sueldo * 1.08;
+                else
+                    sueldo = sueldo * 1.07;
+                end;
+            end;
+        end;
+        cout "Categoria", cat;
+        cout "Nuevo sueldo ($)", sueldo;
+    end;
+}

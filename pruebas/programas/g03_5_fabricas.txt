@@ -1,27 +1,46 @@
 main() {
-    /* G3-5, G6-5, G7-5: N fabricas; por fabrica su CLAVE y la produccion
-       de los 12 meses. Por fabrica imprime: clave, total anual y 1 si en
-       julio supero 3 000 000 (0 si no). Al final: clave y total de la
-       fabrica que mas produjo. */
+    /* G3-5, G6-5, G7-5 (repetitivo): N fabricas; por fabrica su CLAVE y la
+       produccion de los 12 meses. Por fabrica: clave, total anual y
+       1/0 si en julio supero $3 000 000. Al final, la fabrica que mas
+       produjo y su total. */
     int n, i, clave, mes, cmax;
     float p, total, julio, tmax;
-    cin(n);
+    do {
+        cin("Numero de fabricas N (1 a 999)", n);
+        if (n < 1 || n >= 1000) then
+            cout "N debe estar entre 1 y 999";
+        end;
+    } until (n >= 1 && n < 1000);
     i = 1;
     while (i <= n) {
-        cin(clave);
+        do {
+            cin("Clave de la fabrica (entero >= 1)", clave);
+            if (clave < 1) then
+                cout "La clave debe ser 1 o mayor";
+            end;
+        } until (clave >= 1);
         total = 0;
         mes = 1;
         while (mes <= 12) {
-            cin(p);
+            do {
+                cin("Produccion del mes (>= 0)", p);
+                if (p < 0) then
+                    cout "La produccion no puede ser negativa";
+                end;
+            } until (p >= 0);
             total = total + p;
             if (mes == 7) then
                 julio = p;
             end;
             mes++;
         };
-        cout clave;
-        cout total;
-        if (julio > 3000000) then cout 1; else cout 0; end;
+        cout "Clave de la fabrica", clave;
+        cout "Total anual", total;
+        if (julio > 3000000) then
+            cout "Julio supero $3 000 000 (1 = si)", 1;
+        else
+            cout "Julio supero $3 000 000 (0 = no)", 0;
+        end;
         if (i == 1) then
             cmax = clave;
             tmax = total;
@@ -33,6 +52,6 @@ main() {
         end;
         i++;
     };
-    cout cmax;
-    cout tmax;
+    cout "Fabrica que mas produjo", cmax;
+    cout "Su produccion anual", tmax;
 }

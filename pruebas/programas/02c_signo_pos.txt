@@ -1,14 +1,14 @@
 main() {
-    /* positivo = 0, negativo = 1, nulo = 2 */
+    /* G1-2, G7-2 (selectivo): positivo = 0, negativo = 1, nulo = 2 */
     int n;
-    cin(n);
+    cin("Numero entero", n);
     if (n > 0) then
-        cout 0;
+        cout "Positivo (0)", 0;
     else
         if (n < 0) then
-            cout 1;
+            cout "Negativo (1)", 1;
         else
-            cout 2;
+            cout "Nulo (2)", 2;
         end;
     end;
 }

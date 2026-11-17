@@ -1,8 +1,9 @@
 main() {
+    /* G3-3, G10-3 (selectivo): el mayor de tres reales (pueden ser iguales) */
     real a, b, c, m;
-    cin(a);
-    cin(b);
-    cin(c);
+    cin("Primer real", a);
+    cin("Segundo real", b);
+    cin("Tercer real", c);
     if (a >= b && a >= c) then
         m = a;
     else
@@ -12,5 +13,5 @@ main() {
             m = c;
         end;
     end;
-    cout m;
+    cout "El mayor es", m;
 }

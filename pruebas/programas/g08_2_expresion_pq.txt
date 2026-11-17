@@ -1,11 +1,11 @@
 main() {
-    /* G8-2, G12-2: 1 si P^3 + Q^4 - 2*P^2 < 680, 0 si no */
+    /* G8-2, G12-2 (selectivo): 1 si P^3 + Q^4 - 2*P^2 < 680, 0 si no */
     int p, q;
-    cin(p);
-    cin(q);
+    cin("Valor de P (entero)", p);
+    cin("Valor de Q (entero)", q);
     if (p ^ 3 + q ^ 4 - 2 * p ^ 2 < 680) then
-        cout 1;
+        cout "Satisface la expresion (1 = si)", 1;
     else
-        cout 0;
+        cout "Satisface la expresion (0 = no)", 0;
     end;
 }

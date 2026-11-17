@@ -1,7 +1,8 @@
 main() {
+    /* Extra (secuencial): (A + B)^2 y A^3 + B^4 */
     int a, b;
-    cin(a);
-    cin(b);
-    cout (a + b) ^ 2;
-    cout a ^ 3 + b ^ 4;
+    cin("Dato A (entero)", a);
+    cin("Dato B (entero)", b);
+    cout "(A + B)^2", (a + b) ^ 2;
+    cout "A^3 + B^4", a ^ 3 + b ^ 4;
 }

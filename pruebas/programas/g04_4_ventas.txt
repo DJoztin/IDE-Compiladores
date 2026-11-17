@@ -1,14 +1,24 @@
 main() {
-    /* G4-4: N ventas. Imprime cuantas y cuanto suman las de $200 o menos,
-       las mayores a $200 e inferiores a $400, y las de $400 o mas. */
+    /* G4-4 (repetitivo): N ventas. Cuantas y cuanto suman las de $200 o
+       menos, las mayores a $200 e inferiores a $400, y las de $400 o mas */
     int n, i, c1, c2, c3;
     float v, s1, s2, s3;
-    cin(n);
+    do {
+        cin("Numero de ventas (>= 0)", n);
+        if (n < 0) then
+            cout "El numero de ventas no puede ser negativo";
+        end;
+    } until (n >= 0);
     c1 = 0; c2 = 0; c3 = 0;
     s1 = 0; s2 = 0; s3 = 0;
     i = 1;
     while (i <= n) {
-        cin(v);
+        do {
+            cin("Monto de la venta ($, >= 0)", v);
+            if (v < 0) then
+                cout "El monto no puede ser negativo";
+            end;
+        } until (v >= 0);
         if (v <= 200) then
             c1++;
             s1 = s1 + v;
@@ -23,7 +33,10 @@ main() {
         end;
         i++;
     };
-    cout c1; cout s1;
-    cout c2; cout s2;
-    cout c3; cout s3;
+    cout "Ventas de $200 o menos", c1;
+    cout "Suma de esas ventas ($)", s1;
+    cout "Ventas mayores a $200 y menores a $400", c2;
+    cout "Suma de esas ventas ($)", s2;
+    cout "Ventas de $400 o mas", c3;
+    cout "Suma de esas ventas ($)", s3;
 }

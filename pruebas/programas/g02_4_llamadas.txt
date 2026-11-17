@@ -1,14 +1,25 @@
 main() {
-    /* G2-4: por llamada se lee el tipo (1 internacional, 2 nacional,
-       3 local) y la duracion en minutos; termina con tipo 0.
-       Imprime el costo de cada llamada y el total a pagar. */
+    /* G2-4 (repetitivo): costo de un conjunto de llamadas.
+       Internacional: 3 primeros minutos $7.59, cada minuto adicional $3.03
+       Nacional: 3 primeros minutos $1.20, cada minuto adicional $0.48
+       Local: las primeras 50 llamadas no se cobran; luego $0.60 cada una */
     int tipo, minutos, locales;
     float costo, total;
     total = 0;
     locales = 0;
-    cin(tipo);
+    do {
+        cin("Tipo de llamada (1 internacional, 2 nacional, 3 local, 0 terminar)", tipo);
+        if (tipo < 0 || tipo > 3) then
+            cout "Tipo invalido: usa 1, 2, 3 o 0";
+        end;
+    } until (tipo >= 0 && tipo <= 3);
     while (tipo != 0) {
-        cin(minutos);
+        do {
+            cin("Duracion en minutos (>= 1)", minutos);
+            if (minutos < 1) then
+                cout "La duracion debe ser de 1 minuto o mas";
+            end;
+        } until (minutos >= 1);
         costo = 0;
         if (tipo == 1) then
             costo = 7.59;
@@ -28,9 +39,14 @@ main() {
                 costo = 0.60;
             end;
         end;
-        cout costo;
+        cout "Costo de la llamada ($)", costo;
         total = total + costo;
-        cin(tipo);
+        do {
+            cin("Tipo de llamada (1 internacional, 2 nacional, 3 local, 0 terminar)", tipo);
+            if (tipo < 0 || tipo > 3) then
+                cout "Tipo invalido: usa 1, 2, 3 o 0";
+            end;
+        } until (tipo >= 0 && tipo <= 3);
     };
-    cout total;
+    cout "Total a pagar ($)", total;
 }

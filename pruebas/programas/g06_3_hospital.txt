@@ -1,31 +1,31 @@
 main() {
-    /* G6-3: tipo de enfermedad (1:$25 2:$16 3:$20 4:$32 por dia), edad y
-       dias internado. Entre 14 y 22 anios: 10% adicional. */
+    /* G6-3 (selectivo): costo diario segun la enfermedad
+       (1: $25, 2: $16, 3: $20, 4: $32); de 14 a 22 anios, 10% adicional */
     int tipo, edad, dias;
     float costo, total;
-    cin(tipo);
-    cin(edad);
-    cin(dias);
-    if (tipo == 1) then
-        costo = 25;
+    cin("Tipo de enfermedad (1, 2, 3 o 4)", tipo);
+    cin("Edad del paciente", edad);
+    cin("Dias de internacion", dias);
+    if (tipo < 1 || tipo > 4 || edad < 0 || dias < 1) then
+        cout "Datos invalidos: tipo 1 a 4, edad no negativa, al menos 1 dia";
     else
-        if (tipo == 2) then
-            costo = 16;
+        if (tipo == 1) then
+            costo = 25;
         else
-            if (tipo == 3) then
-                costo = 20;
+            if (tipo == 2) then
+                costo = 16;
             else
-                if (tipo == 4) then
-                    costo = 32;
+                if (tipo == 3) then
+                    costo = 20;
                 else
-                    costo = 0;
+                    costo = 32;
                 end;
             end;
         end;
+        total = costo * dias;
+        if (edad >= 14 && edad <= 22) then
+            total = total * 1.10;
+        end;
+        cout "Costo total del paciente ($)", total;
     end;
-    total = costo * dias;
-    if (edad >= 14 && edad <= 22) then
-        total = total * 1.10;
-    end;
-    cout total;
 }

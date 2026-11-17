@@ -1,11 +1,12 @@
 main() {
+    /* G1-3 (selectivo): 1 si A < B < C (orden creciente), 0 si no */
     int a, b, c;
-    cin(a);
-    cin(b);
-    cin(c);
+    cin("Primer entero", a);
+    cin("Segundo entero", b);
+    cin("Tercer entero", c);
     if (a < b && b < c) then
-        cout 1;
+        cout "En orden creciente (1 = si)", 1;
     else
-        cout 0;
+        cout "En orden creciente (0 = no)", 0;
     end;
 }

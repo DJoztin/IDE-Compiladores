@@ -46,6 +46,7 @@ class Estado:
     ZERODIVIDE = "ZERODIVIDE"
     LIMITE = "LIMITE"
     OVERFLOW = "OVERFLOW"
+    MENSAJE = "MENSAJE"          # cout "texto";  (LDA 0,0(0) con comentario msg:)
 
 
 MENSAJE_ESTADO = {
@@ -187,6 +188,7 @@ class MaquinaTM:
     def __init__(self, max_pasos: int = MAX_PASOS):
         self.max_pasos = max_pasos
         self.iMem = [("HALT", 0, 0, 0)] * IADDR_SIZE
+        self.comentarios: dict[int, str] = {}   # comentario de cada instrucción
         self.cargadas: set[int] = set()     # direcciones definidas en el .tm
         self.reg = [0] * NO_REGS
         self.dMem = [0] * DADDR_SIZE
@@ -202,6 +204,7 @@ class MaquinaTM:
         """Lee el texto de un .tm. Devuelve la lista de errores (vacía si
         se cargó bien). El formato del mensaje es el de tm.c."""
         self.iMem = [("HALT", 0, 0, 0)] * IADDR_SIZE
+        self.comentarios = {}
         self.cargadas = set()
         self.reiniciar()
 
@@ -262,7 +265,9 @@ class MaquinaTM:
                 if not reg_ok():
                     return error("Bad second register", line_no, loc)
                 a3 = lx.num
+                lx.skip_ch(")")
             self.iMem[loc] = (op, a1, a2, a3)
+            self.comentarios[loc] = linea[lx.col:].strip()
             self.cargadas.add(loc)
         return []
 
@@ -274,8 +279,36 @@ class MaquinaTM:
         self.salidas = []
         self.pasos = 0
         self.esperando_reg = None
+        self.esperando_loc = None
         self.ultima_salida = None
+        self.ultima_etiqueta = ""
+        self.ultimo_mensaje = ""
+        self.error_entrada = ""
         self.estado = Estado.OKAY
+
+    # ── textos para el usuario (vienen de los comentarios del .tm) ──
+    def _partes(self, loc):
+        """('read integer value: x', 'indicación') del comentario de loc."""
+        c = self.comentarios.get(loc, "")
+        base, _, extra = c.partition(" | ")
+        return base.strip(), extra.strip()
+
+    def pista_entrada(self) -> str:
+        """Qué se pide en el IN pendiente: la indicación del programa o,
+        si no hay, el nombre y tipo de la variable."""
+        if self.esperando_loc is None:
+            return ""
+        base, extra = self._partes(self.esperando_loc)
+        if extra:
+            return extra
+        for pref, tipo in (("read integer value:", "int"), ("read real value:", "float")):
+            if base.startswith(pref):
+                return f"{base[len(pref):].strip()} ({tipo})"
+        return ""
+
+    def espera_entero(self) -> bool:
+        base, _ = self._partes(self.esperando_loc) if self.esperando_loc is not None else ("", "")
+        return base.startswith("read integer value")
 
     @property
     def pc(self):
@@ -321,9 +354,11 @@ class MaquinaTM:
             return Estado.HALT
         if op == "IN":
             self.esperando_reg = r
+            self.esperando_loc = pc
             return Estado.NECESITA_ENTRADA
         if op == "OUT":
             self.ultima_salida = reg[r]
+            self.ultima_etiqueta = self._partes(pc)[1]
             self.salidas.append(reg[r])
             return Estado.SALIDA
         if op == "ADD":
@@ -345,6 +380,10 @@ class MaquinaTM:
             self.dMem[m] = reg[r]
         elif op == "LDA":
             reg[r] = m
+            c = self.comentarios.get(pc, "")
+            if c.startswith("msg:"):
+                self.ultimo_mensaje = c[4:].strip()
+                return Estado.MENSAJE
         elif op == "LDC":
             reg[r] = a2
         elif op == "JLT":
@@ -372,14 +411,33 @@ class MaquinaTM:
     def dar_entrada(self, texto: str) -> bool:
         """Responde a un IN pendiente. False si el valor es ilegal
         (la TM sigue esperando)."""
+        self.error_entrada = ""
         if self.esperando_reg is None:
             return False
         v = self.parsear_entrada(texto)
         if v is None:
+            self.error_entrada = "Illegal value"
             return False
+        if self.espera_entero() and isinstance(v, float):
+            if v != int(v):
+                self.error_entrada = "Illegal value: se esperaba un numero entero"
+                return False
+            v = int(v)
         self.reg[self.esperando_reg] = v
         self.esperando_reg = None
+        self.esperando_loc = None
         return True
+
+    def texto_salida(self) -> str:
+        """Línea de un OUT, con su etiqueta si el programa la dio."""
+        t = f"Resultado del programa (OUT): {fmt_valor(self.ultima_salida)}"
+        if self.ultima_etiqueta:
+            t += f"   <- {self.ultima_etiqueta}"
+        return t
+
+    def texto_pedir(self) -> str:
+        pista = self.pista_entrada()
+        return f"Ingrese un numero (IN) - {pista}: " if pista else "Ingrese un numero (IN): "
 
     # ── utilidades para la consola y el IDE ───────────────────
     def texto_instruccion(self, loc: int) -> str:
@@ -402,7 +460,7 @@ class MaquinaTM:
             self.max_pasos = max_pasos
         while True:
             st = self.paso()
-            if st in (Estado.OKAY, Estado.SALIDA):
+            if st in (Estado.OKAY, Estado.SALIDA, Estado.MENSAJE):
                 continue
             if st == Estado.NECESITA_ENTRADA:
                 if not entradas:
@@ -564,7 +622,7 @@ class ConsolaTM:
             st = m.paso()
             if st == Estado.NECESITA_ENTRADA:
                 while True:
-                    self.escribir("Ingrese un numero (IN): ")
+                    self.escribir(m.texto_pedir())
                     try:
                         txt = (pedir_entrada or self.leer)()
                     except EOFError:
@@ -572,12 +630,15 @@ class ConsolaTM:
                         break
                     if m.dar_entrada(txt):
                         break
-                    self.out("Illegal value")
+                    self.out(m.error_entrada)
                 if st == Estado.HALT:
                     break
                 st = Estado.OKAY
             elif st == Estado.SALIDA:
-                self.out(f"Resultado del programa (OUT): {fmt_valor(m.ultima_salida)}")
+                self.out(m.texto_salida())
+                st = Estado.OKAY
+            elif st == Estado.MENSAJE:
+                self.out(m.ultimo_mensaje)
                 st = Estado.OKAY
             contador += 1
             if not hasta_halt:

@@ -1,10 +1,16 @@
 main() {
+    /* Extra (repetitivo): factorial con while */
     int n, f;
-    cin(n);
+    do {
+        cin("N para calcular N! (0 a 20)", n);
+        if (n < 0 || n > 20) then
+            cout "N debe estar entre 0 y 20";
+        end;
+    } until (n >= 0 && n <= 20);
     f = 1;
     while (n > 1) {
         f = f * n;
         n--;
     };
-    cout f;
+    cout "Factorial", f;
 }

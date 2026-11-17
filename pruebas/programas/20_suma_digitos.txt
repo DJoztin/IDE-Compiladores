@@ -1,10 +1,16 @@
 main() {
+    /* Extra (repetitivo con do-until): suma de los digitos de un entero */
     int n, s;
-    cin(n);
+    do {
+        cin("Entero no negativo", n);
+        if (n < 0) then
+            cout "Debe ser 0 o mayor";
+        end;
+    } until (n >= 0);
     s = 0;
     do {
         s = s + n % 10;
         n = n / 10;
     } until (n == 0);
-    cout s;
+    cout "Suma de digitos", s;
 }

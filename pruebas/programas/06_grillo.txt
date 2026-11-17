@@ -1,10 +1,11 @@
 main() {
+    /* G2-2, G9-2 (selectivo): T = h / 4 + 40 (grados Fahrenheit) */
     float h, t;
-    cin(h);
+    cin("Sonidos del grillo por minuto (h >= 0)", h);
     if (h >= 0) then
         t = h / 4 + 40;
-        cout t;
+        cout "Temperatura (F)", t;
     else
-        cout -1;
+        cout "El numero de sonidos no puede ser negativo";
     end;
 }

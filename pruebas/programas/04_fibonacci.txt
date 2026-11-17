@@ -1,6 +1,12 @@
 main() {
+    /* G1-4 (repetitivo): termino N de Fibonacci (0, 1, 1, 2, 3, 5...) */
     int n, a, b, t, i;
-    cin(n);
+    do {
+        cin("Que termino de Fibonacci (N >= 1)", n);
+        if (n < 1) then
+            cout "N debe ser 1 o mayor";
+        end;
+    } until (n >= 1);
     a = 0;
     b = 1;
     i = 1;
@@ -10,5 +16,5 @@ main() {
         b = t;
         i++;
     };
-    cout a;
+    cout "Termino N de Fibonacci", a;
 }

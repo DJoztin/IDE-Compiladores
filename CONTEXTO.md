@@ -64,8 +64,9 @@ asig_incr   → ID ('=' expresion | '++' | '--') ';'
 if_stmt     → 'if' '(' condicion ')' 'then' lista_sent ('else' lista_sent)? 'end' ';'
 do_until    → 'do' '{' lista_sent '}' 'until' '(' condicion ')' ';'
 while_stmt  → 'while' '(' condicion ')' '{' lista_sent '}' ';'
-cin_stmt    → 'cin' '(' ID ')' ';'
+cin_stmt    → 'cin' '(' (CADENA ',')? ID ')' ';'
 cout_stmt   → 'cout' expresion ';'
+            | 'cout' '('? CADENA (',' expresion)? ')'? ';'
 condicion   → expr_rel (('&&'|'||') expr_rel)*
 expr_rel    → expresion (OP_REL expresion)?
 expresion   → termino (('+'|'-') termino)*
@@ -286,6 +287,16 @@ potencia → factor ('^' potencia)?          (asociativa a la derecha)
 - Editar el fuente o cambiar de pestaña marca los paneles como `⚠ desactualizado` y deshabilita Paso/Reiniciar.
 - `Ide.exe --autoprueba prog.txt salida.txt [entradas...]` compila y ejecuta sin ventana (para comprobar el `.exe`).
 - `IDE.spec` incluye `code_tm.py`, `cgen.py`, `intermedio.py` y `tm.py` en `datas`.
+
+### Textos para el usuario (sin opcodes nuevos)
+- `cin("Clave de zona (12, 15, 18...)", clave);` — indicación de lo que se pide.
+- `cout "Costo de la llamada", costo;` — etiqueta del resultado.
+- `cout "Clave invalida, intenta de nuevo";` — mensaje suelto (nodo `mensaje`).
+Los textos van en el comentario de la instrucción del `.tm`: `IN 0,0,0  read integer value: clave | Clave de zona…`, `OUT 0,0,0  write ac: costo | Costo…`, y el mensaje como `LDA 0,0(0)  msg: …` (no cambia ningún registro). La TM del IDE los muestra; `tm.c` los ignora y ejecuta igual. Sin texto, la TM muestra el nombre y tipo de la variable (`minutos (int)`). Si la variable es `int`, la TM rechaza un valor con decimales.
+Los programas de ejercicios validan sus entradas: los repetitivos vuelven a pedir con `do … until`; los selectivos avisan con un mensaje dentro del `if`.
+
+### Iconos
+`iconos.py` dibuja con QPainter los íconos de los botones (sin emojis), recoloreados con cada tema (`poner_icono` / `refrescar_iconos`).
 
 ### Pruebas
 `python pruebas/run_tests.py` (sin dependencias): oro contra TINY (factorial, aritmética, condicional, ciclo: mismo `.tm` y `.ci`), la TM ejecuta los `.tm` de la docente, ~40 casos por construcción (TM == oráculo `interprete_ast.py` == esperado), errores (sin `.tm`, división entre cero, ciclo infinito) y 65 programas en `pruebas/programas/` (`.txt`, `.in`, `.esperado`) que cubren todos los ejercicios de los 12 grupos (índice en `docs/EJERCICIOS.md`).

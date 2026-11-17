@@ -1,31 +1,37 @@
 main() {
-    /* G4-3: sueldo, horas extra y categoria (1:$30 2:$38 3:$50 4:$70 por hora).
-       Maximo 30 horas extra; categoria mayor a 4 no cobra horas extra. */
+    /* G4-3 (selectivo): sueldo + horas extra segun la categoria
+       (1: $30, 2: $38, 3: $50, 4: $70 por hora). Maximo 30 horas extra;
+       con categoria mayor a 4 no se pagan horas extra. */
     float sueldo, precio, pago;
     int horas, cat;
-    cin(sueldo);
-    cin(horas);
-    cin(cat);
-    if (horas > 30) then
-        horas = 30;
-    end;
-    if (cat == 1) then
-        precio = 30;
+    cin("Sueldo del trabajador ($)", sueldo);
+    cin("Horas extra trabajadas (>= 0)", horas);
+    cin("Categoria (1 a 4; mayor a 4 = sin horas extra)", cat);
+    if (sueldo < 0 || horas < 0 || cat < 1) then
+        cout "Datos invalidos: sueldo y horas no negativos, categoria 1 o mayor";
     else
-        if (cat == 2) then
-            precio = 38;
+        if (horas > 30) then
+            horas = 30;
+            cout "Solo se pagan 30 horas extra";
+        end;
+        if (cat == 1) then
+            precio = 30;
         else
-            if (cat == 3) then
-                precio = 50;
+            if (cat == 2) then
+                precio = 38;
             else
-                if (cat == 4) then
-                    precio = 70;
+                if (cat == 3) then
+                    precio = 50;
                 else
-                    precio = 0;
+                    if (cat == 4) then
+                        precio = 70;
+                    else
+                        precio = 0;
+                    end;
                 end;
             end;
         end;
+        pago = sueldo + horas * precio;
+        cout "Total a pagar ($)", pago;
     end;
-    pago = sueldo + horas * precio;
-    cout pago;
 }

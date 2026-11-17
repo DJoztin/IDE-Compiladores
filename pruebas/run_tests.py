@@ -232,6 +232,58 @@ for nombre, cuerpo, ent, esp in CASOS:
           f"tm={st} {sal} oraculo={orac} esperado={esp}")
 
 # ═══════════════════════════════════════════════════════════════
+print("3b. Textos para el usuario (cin con indicación, cout con etiqueta/mensaje)")
+src = """main() {
+    int clave, m;
+    float x;
+    cout "Calculo de prueba";
+    do {
+        cin("Clave (1, 2 o 3)", clave);
+        if (clave < 1 || clave > 3) then
+            cout("Clave invalida, intenta de nuevo");
+        end;
+    } until (clave >= 1 && clave <= 3);
+    cin(m);
+    cin("Un real", x);
+    cout "Clave elegida", clave;
+    cout x * 2;
+}"""
+r = compilar_ok(src)
+check("textos: compila", r.ok, [str(e) for e in r.errores_sint + r.errores_sem])
+if r.ok:
+    m = tm.MaquinaTM(); m.cargar(r.codigo_tm)
+    eventos = []
+    entradas = ["7", "2.5", "2", "4", "1.5"]
+    while True:
+        st = m.paso()
+        if st == tm.Estado.NECESITA_ENTRADA:
+            eventos.append(("pide", m.pista_entrada()))
+            v = entradas.pop(0)
+            if not m.dar_entrada(v):
+                eventos.append(("rechaza", v, m.error_entrada))
+                v = entradas.pop(0)
+                assert m.dar_entrada(v)
+        elif st == tm.Estado.MENSAJE:
+            eventos.append(("msg", m.ultimo_mensaje))
+        elif st == tm.Estado.SALIDA:
+            eventos.append(("out", m.texto_salida()))
+        elif st != tm.Estado.OKAY:
+            break
+    esperado = [("msg", "Calculo de prueba"), ("pide", "Clave (1, 2 o 3)"),
+                ("msg", "Clave invalida, intenta de nuevo"), ("pide", "Clave (1, 2 o 3)"),
+                ("rechaza", "2.5", "Illegal value: se esperaba un numero entero"),
+                ("pide", "m (int)"), ("pide", "Un real"),
+                ("out", "Resultado del programa (OUT): 2   <- Clave elegida"),
+                ("out", "Resultado del programa (OUT): 3.0")]
+    check("textos: indicaciones, rechazo de real en int, etiquetas y mensajes",
+          eventos == esperado, f"\n{eventos}")
+    check("textos: salidas numéricas sin los mensajes", m.salidas == [2, 3.0], m.salidas)
+    check("textos: .ci con write de texto", 'write "Calculo de prueba"' in r.codigo_ci)
+    check("textos: mensaje = LDA 0,0(0) (no altera registros)",
+          any(i[1] == "LDA" and i[2:5] == (0, 0, 0) and i[5].startswith("msg:")
+              for i in r.instrucciones))
+
+# ═══════════════════════════════════════════════════════════════
 print("4. Errores")
 with tempfile.TemporaryDirectory() as d:
     fuente = os.path.join(d, "prog.txt")

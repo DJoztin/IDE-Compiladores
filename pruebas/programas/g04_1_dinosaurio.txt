@@ -1,10 +1,10 @@
 main() {
-    /* G4-1: peso en libras -> kg ; longitud en pies -> metros */
+    /* G4-1 (secuencial): libras -> kilogramos ; pies -> metros */
     float libras, pies, kg, metros;
-    cin(libras);
-    cin(pies);
+    cin("Peso del dinosaurio (libras)", libras);
+    cin("Longitud del dinosaurio (pies)", pies);
     kg = libras * 0.4536;
     metros = pies * 0.3048;
-    cout kg;
-    cout metros;
+    cout "Peso (kg)", kg;
+    cout "Longitud (m)", metros;
 }

@@ -1,0 +1,38 @@
+main() {
+    /* G7-4, G12-4 (repetitivo): votos de 4 candidatos; termina con 0.
+       Imprime los votos y el porcentaje de cada candidato. */
+    int v, c1, c2, c3, c4, total;
+    float p;
+    c1 = 0; c2 = 0; c3 = 0; c4 = 0; total = 0;
+    do {
+        cin("Voto (candidato 1, 2, 3 o 4; 0 = fin)", v);
+        if (v < 0 || v > 4) then
+            cout "Voto invalido: usa 1 a 4, o 0 para terminar";
+        end;
+    } until (v >= 0 && v <= 4);
+    while (v != 0) {
+        if (v == 1) then c1++; end;
+        if (v == 2) then c2++; end;
+        if (v == 3) then c3++; end;
+        if (v == 4) then c4++; end;
+        total++;
+        do {
+            cin("Voto (candidato 1, 2, 3 o 4; 0 = fin)", v);
+            if (v < 0 || v > 4) then
+                cout "Voto invalido: usa 1 a 4, o 0 para terminar";
+            end;
+        } until (v >= 0 && v <= 4);
+    };
+    cout "Votos candidato 1", c1;
+    cout "Votos candidato 2", c2;
+    cout "Votos candidato 3", c3;
+    cout "Votos candidato 4", c4;
+    if (total > 0) then
+        p = c1 * 100.0 / total; cout "% candidato 1", p;
+        p = c2 * 100.0 / total; cout "% candidato 2", p;
+        p = c3 * 100.0 / total; cout "% candidato 3", p;
+        p = c4 * 100.0 / total; cout "% candidato 4", p;
+    else
+        cout "No hubo votos";
+    end;
+}

@@ -1,19 +1,25 @@
 main() {
+    /* G2-3, G9-3 (selectivo): primeros $20 sin impuesto, siguientes $20 al
+       30%, el resto al 40% (50% si el costo es mayor a $500) */
     float costo, imp, total;
-    cin(costo);
-    if (costo <= 20) then
-        imp = 0;
+    cin("Costo basico del articulo ($)", costo);
+    if (costo < 0) then
+        cout "El costo no puede ser negativo";
     else
-        if (costo <= 40) then
-            imp = (costo - 20) * 0.30;
+        if (costo <= 20) then
+            imp = 0;
         else
-            if (costo > 500) then
-                imp = 20 * 0.30 + (costo - 40) * 0.50;
+            if (costo <= 40) then
+                imp = (costo - 20) * 0.30;
             else
-                imp = 20 * 0.30 + (costo - 40) * 0.40;
+                if (costo > 500) then
+                    imp = 20 * 0.30 + (costo - 40) * 0.50;
+                else
+                    imp = 20 * 0.30 + (costo - 40) * 0.40;
+                end;
             end;
         end;
+        total = costo + imp;
+        cout "Precio total ($)", total;
     end;
-    total = costo + imp;
-    cout total;
 }

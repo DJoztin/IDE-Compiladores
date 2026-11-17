@@ -1,12 +1,13 @@
 main() {
+    /* G8-4 (repetitivo): cuantos ceros hay entre N enteros; fin con -1 */
     int x, ceros;
     ceros = 0;
-    cin(x);
+    cin("Numero entero (-1 = terminar)", x);
     while (x != -1) {
         if (x == 0) then
             ceros++;
         end;
-        cin(x);
+        cin("Numero entero (-1 = terminar)", x);
     };
-    cout ceros;
+    cout "Cantidad de ceros", ceros;
 }

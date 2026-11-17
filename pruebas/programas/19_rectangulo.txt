@@ -1,9 +1,10 @@
 main() {
+    /* G3-1, G10-1 (secuencial): perimetro y area de un rectangulo */
     float base, altura, per, area;
-    cin(base);
-    cin(altura);
+    cin("Base del rectangulo", base);
+    cin("Altura del rectangulo", altura);
     per = 2 * (base + altura);
     area = base * altura;
-    cout per;
-    cout area;
+    cout "Perimetro", per;
+    cout "Area", area;
 }

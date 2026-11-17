@@ -1,12 +1,17 @@
 main() {
-    /* 1^1 + 2^2 + ... + N^N */
+    /* G3-4 (repetitivo): 1^1 + 2^2 + 3^3 + ... + N^N */
     int n, i, s;
-    cin(n);
+    do {
+        cin("N (entero >= 1)", n);
+        if (n < 1) then
+            cout "N debe ser 1 o mayor";
+        end;
+    } until (n >= 1);
     s = 0;
     i = 1;
     do {
         s = s + i ^ i;
         i++;
     } until (i > n);
-    cout s;
+    cout "Suma de la serie", s;
 }

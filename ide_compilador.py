@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from highlighter import LexicoHighlighter
 from token_panel import TokenPanel
+from iconos import icono
 
 import sys, os, subprocess, tempfile
 from PyQt6.QtWidgets import (
@@ -104,6 +105,28 @@ THEMES = {
 }
 
 C = dict(THEMES["VS Dark"])
+
+# (widget o QAction, nombre del ícono, clave de color del tema)
+_ICONOS_TEMA: list = []
+
+
+def poner_icono(w, nombre, clave="fg_dim", color=None):
+    """Asigna un ícono vectorial y lo registra para recolorearlo con el tema.
+    'color' fijo (p. ej. 'white') ignora el tema."""
+    w.setIcon(icono(nombre, color or C[clave]))
+    _ICONOS_TEMA.append((w, nombre, clave, color))
+    return w
+
+
+def refrescar_iconos():
+    vivos = []
+    for w, nombre, clave, color in _ICONOS_TEMA:
+        try:
+            w.setIcon(icono(nombre, color or C[clave]))
+            vivos.append((w, nombre, clave, color))
+        except RuntimeError:          # el widget ya fue destruido
+            pass
+    _ICONOS_TEMA[:] = vivos
 
 
 def build_stylesheet(t):
@@ -475,7 +498,8 @@ class FileExplorer(QWidget):
         self.lbl_folder = QLabel("SIN CARPETA")
         bl.addWidget(self.lbl_folder)
         bl.addStretch()
-        btn = QPushButton("📂")
+        btn = QPushButton()
+        poner_icono(btn, "carpeta")
         btn.setFixedSize(22, 22)
         btn.setToolTip("Abrir carpeta")
         btn.clicked.connect(self._open_folder)
@@ -621,6 +645,7 @@ _TREE_NODE_COLOR = {
     "expresion":       "#d4d4d4",
     "termino":         "#b0b0b0",
     "potencia":        "#ce9178",
+    "mensaje":         "#ce9178",
     "factor_par":      "#b0b0b0",
     "negativo":        "#dcdcaa",
     "reservada":       "#569cd6",
@@ -777,10 +802,10 @@ class SyntaxTreePanel(QWidget):
         self._lbl_info = QLabel(titulo)
         bl.addWidget(self._lbl_info)
         bl.addStretch()
-        btn_exp  = QPushButton("↕ Expandir todo")
-        btn_col  = QPushButton("↔ Colapsar todo")
-        btn_txt  = QPushButton("⎘ Exportar .txt")
-        btn_win  = QPushButton("⊞ Ventana")
+        btn_exp  = poner_icono(QPushButton(" Expandir todo"), "expandir")
+        btn_col  = poner_icono(QPushButton(" Colapsar todo"), "colapsar")
+        btn_txt  = poner_icono(QPushButton(" Exportar .txt"), "exportar")
+        btn_win  = poner_icono(QPushButton(" Ventana"), "ventana")
         btn_txt.setToolTip("Guardar el árbol con ramas como archivo de texto")
         for b in (btn_exp, btn_col, btn_txt, btn_win):
             b.setFixedHeight(22)
@@ -853,7 +878,7 @@ class SyntaxTreePanel(QWidget):
             self._lbl_info.setStyleSheet(
                 f"color:{C['red']}; font-size:8pt; font-weight:bold;")
         else:
-            self._lbl_info.setText(f"{self._titulo}  —  ✓ Sin errores")
+            self._lbl_info.setText(f"{self._titulo}  —  Sin errores")
             self._lbl_info.setStyleSheet(
                 f"color:{C['green']}; font-size:8pt; font-weight:bold;")
 
@@ -937,8 +962,8 @@ class SyntaxTreePanel(QWidget):
         tree2.expandAll()
 
         bar = QHBoxLayout()
-        b_exp = QPushButton("↕ Expandir todo")
-        b_col = QPushButton("↔ Colapsar todo")
+        b_exp = poner_icono(QPushButton(" Expandir todo"), "expandir")
+        b_col = poner_icono(QPushButton(" Colapsar todo"), "colapsar")
         b_exp.clicked.connect(tree2.expandAll)
         b_col.clicked.connect(tree2.collapseAll)
         bar.addWidget(b_exp); bar.addWidget(b_col); bar.addStretch()
@@ -985,8 +1010,8 @@ class SemanticPanel(QWidget):
         self._lbl = QLabel("Análisis Semántico")
         bl.addWidget(self._lbl)
         bl.addStretch()
-        b_cmp = QPushButton("⊞ Comparar AST")
-        b_exp = QPushButton("⎘ Exportar evidencias")
+        b_cmp = poner_icono(QPushButton(" Comparar AST"), "comparar")
+        b_exp = poner_icono(QPushButton(" Exportar evidencias"), "exportar")
         b_cmp.setToolTip("AST original y AST anotado lado a lado")
         b_exp.setToolTip("Guarda árbol, árbol anotado, tabla, recorrido y "
                          "errores como archivos .txt")
@@ -1031,7 +1056,7 @@ class SemanticPanel(QWidget):
         n = len(res.errores_sem)
         self._lbl.setText(
             f"Análisis Semántico  —  {len(res.tabla)} símbolo(s), "
-            + (f"{n} error(es)" if n else "✓ sin errores"))
+            + (f"{n} error(es)" if n else "sin errores"))
         self._lbl.setStyleSheet(
             f"color:{C['red'] if n else C['green']}; font-size:8pt;"
             f" font-weight:bold;")
@@ -1154,11 +1179,13 @@ _TM_COLOR = {"mem": "#569cd6", "arit": "#4ec9b0", "salto": "#c586c0",
              "es": "#d7ba7d", "halt": "#f44747"}
 
 
-def _boton_barra(texto, tip=""):
+def _boton_barra(texto, tip="", ico=None):
     b = QPushButton(texto)
     b.setFixedHeight(22)
     if tip:
         b.setToolTip(tip)
+    if ico:
+        poner_icono(b, ico)
     return b
 
 
@@ -1182,9 +1209,9 @@ class CodigoPanel(QWidget):
         self._lbl = QLabel("Código Intermedio — sin generar (F8)")
         bl.addWidget(self._lbl)
         bl.addStretch()
-        self.b_tm = _boton_barra("💾 Guardar .tm", "Guardar el código TM en otro archivo")
-        self.b_ci = _boton_barra("💾 Guardar .ci", "Guardar el código de tres direcciones")
-        self.b_cp = _boton_barra("⎘ Copiar", "Copiar al portapapeles la vista actual")
+        self.b_tm = _boton_barra(" Guardar .tm", "Guardar el código TM en otro archivo", "guardar")
+        self.b_ci = _boton_barra(" Guardar .ci", "Guardar el código de tres direcciones", "guardar")
+        self.b_cp = _boton_barra(" Copiar", "Copiar al portapapeles la vista actual", "copiar")
         for b in (self.b_tm, self.b_ci, self.b_cp):
             bl.addWidget(b)
         self.b_tm.clicked.connect(lambda: self._guardar("tm"))
@@ -1192,8 +1219,14 @@ class CodigoPanel(QWidget):
         self.b_cp.clicked.connect(self._copiar)
         lay.addWidget(self._bar)
 
-        self._aviso = QLabel("")
-        self._aviso.setWordWrap(True)
+        self._aviso = QFrame()
+        al = QHBoxLayout(self._aviso)
+        al.setContentsMargins(8, 3, 8, 3)
+        self._aviso_ico = QLabel()
+        self._aviso_txt = QLabel("")
+        self._aviso_txt.setWordWrap(True)
+        al.addWidget(self._aviso_ico)
+        al.addWidget(self._aviso_txt, 1)
         self._aviso.hide()
         lay.addWidget(self._aviso)
 
@@ -1253,16 +1286,18 @@ class CodigoPanel(QWidget):
         self._bar.setStyleSheet(
             f"background:{C['bg3']}; border-bottom:1px solid {C['separator']};")
         self._vbar.setStyleSheet(f"background:{C['bg2']};")
-        self._aviso.setStyleSheet(
-            f"background:{C['orange']}; color:#1e1e1e; padding:4px 8px;"
-            f" font-weight:bold;")
+        self._aviso.setStyleSheet(f"background:{C['orange']};")
+        self._aviso_txt.setStyleSheet("color:#1e1e1e; font-weight:bold;")
+        from iconos import pixmap
+        self._aviso_ico.setPixmap(pixmap("aviso", "#1e1e1e"))
         self._color_lbl(self._lbl_color if hasattr(self, "_lbl_color") else "fg_dim")
         chk = (f"QPushButton {{ color:{C['fg_dim']}; border:1px solid {C['border']};"
                f" padding:1px 10px; }} QPushButton:checked {{ background:{C['active']};"
                f" color:white; }}")
         self.btn_tabla.setStyleSheet(chk)
         self.btn_archivo.setStyleSheet(chk)
-        ley = "  ".join(f"<span style='color:{_TM_COLOR[k]}'>■</span> {t}" for k, t in
+        ley = "&nbsp;&nbsp;".join(
+            f"<span style='background:{_TM_COLOR[k]}'>&nbsp;&nbsp;&nbsp;</span>&nbsp;{t}" for k, t in
                         (("mem", "carga/almacén"), ("arit", "aritmética"),
                          ("salto", "saltos"), ("es", "E/S")))
         self._lbl_leyenda.setText(ley)
@@ -1355,7 +1390,7 @@ class CodigoPanel(QWidget):
         if self._r is None:
             return
         if si:
-            self._aviso.setText("⚠ desactualizado — el fuente cambió, vuelve a compilar (F8 / F9)")
+            self._aviso_txt.setText("Desactualizado — el fuente cambió, vuelve a compilar (F8 / F9)")
             self._aviso.show()
             self.tabla.setEnabled(False)
         else:
@@ -1448,10 +1483,10 @@ class TMPanel(QWidget):
         self._bar.setFixedHeight(32)
         bl = QHBoxLayout(self._bar)
         bl.setContentsMargins(6, 0, 6, 0)
-        self.b_run = _boton_barra("▶ Ejecutar (g)", "Recompila el fuente actual y lo ejecuta (F9)")
-        self.b_step = _boton_barra("Paso (s)", "Ejecuta una instrucción")
-        self.b_reset = _boton_barra("Reiniciar (c)", "Reinicia registros y memoria")
-        self.b_stop = _boton_barra("■ Detener", "Detiene la ejecución")
+        self.b_run = _boton_barra(" Ejecutar (g)", "Recompila el fuente actual y lo ejecuta (F9)", "ejecutar")
+        self.b_step = _boton_barra(" Paso (s)", "Ejecuta una instrucción", "paso")
+        self.b_reset = _boton_barra(" Reiniciar (c)", "Reinicia registros y memoria", "reiniciar")
+        self.b_stop = _boton_barra(" Detener", "Detiene la ejecución", "detener")
         for b in (self.b_run, self.b_step, self.b_reset, self.b_stop):
             bl.addWidget(b)
         self.chk_traza = QCheckBox("Rastreo (t)")
@@ -1517,7 +1552,7 @@ class TMPanel(QWidget):
         self.chk_contar.toggled.connect(self._sync_flags)
         self._refresh_styles()
         self._actualizar_botones()
-        self._escribir("Simulador TM: compila y ejecuta con F9 (o ▶ Ejecutar).", "dim")
+        self._escribir("Simulador TM: compila y ejecuta con F9 (o el botón Ejecutar).", "dim")
 
     # ── estilo ──
     def _refresh_styles(self):
@@ -1547,7 +1582,8 @@ class TMPanel(QWidget):
     def _escribir(self, texto, tipo="normal"):
         import html
         color = {"normal": C['green'], "dim": C['fg_dim'], "err": C['red'],
-                 "out": C['fg'], "in": C['orange'], "ok": C['active']}.get(tipo, C['green'])
+                 "out": C['fg'], "in": C['orange'], "ok": C['active'],
+                 "msg": C['fg']}.get(tipo, C['green'])
         for linea in texto.split("\n"):
             peso = "bold" if tipo in ("out", "err") else "normal"
             self.out.appendHtml(
@@ -1601,7 +1637,7 @@ class TMPanel(QWidget):
         self._desactualizado = si
         if si:
             self.detener(silencioso=True)
-            self._escribir("⚠ desactualizado — el fuente cambió: vuelve a compilar (F9)", "in")
+            self._escribir("[desactualizado] el fuente cambió: vuelve a compilar (F9)", "in")
         self._actualizar_botones()
 
     def _actualizar_botones(self):
@@ -1660,7 +1696,10 @@ class TMPanel(QWidget):
             if st == E.OKAY:
                 continue
             if st == E.SALIDA:
-                self._escribir(f"Resultado del programa (OUT): {tm.fmt_valor(m.ultima_salida)}", "out")
+                self._escribir(m.texto_salida(), "out")
+                continue
+            if st == E.MENSAJE:
+                self._escribir(m.ultimo_mensaje, "msg")
                 continue
             if st == E.NECESITA_ENTRADA:
                 self._pedir_entrada()
@@ -1673,8 +1712,11 @@ class TMPanel(QWidget):
     def _pedir_entrada(self):
         self._corriendo = False
         self._esperando = True
-        self._escribir("Ingrese un numero (IN):", "in")
-        self._lbl_ent.setText("Ingrese un numero (IN):")
+        self._escribir(self.m.texto_pedir().rstrip(), "in")
+        pista = self.m.pista_entrada()
+        self._lbl_ent.setText(f"{pista}:" if pista else "Ingrese un numero (IN):")
+        self.entrada.setPlaceholderText(
+            "número entero" if self.m.espera_entero() else "número (entero o real)")
         self._refresh_styles()
         self._actualizar_vistas()
         self._actualizar_botones()
@@ -1727,9 +1769,10 @@ class TMPanel(QWidget):
         if self._esperando:
             self._escribir(txt, "in")
             if not self.m.dar_entrada(txt):
-                self._escribir("Illegal value", "err")
-                self._escribir("Ingrese un numero (IN):", "in")
+                self._escribir(self.m.error_entrada, "err")
+                self._escribir(self.m.texto_pedir().rstrip(), "in")
                 return
+            self.entrada.setPlaceholderText("")
             self._esperando = False
             self._corriendo = True
             self._lbl_ent.setText("Comando TM (h=ayuda):")
@@ -1775,7 +1818,7 @@ class TMPanel(QWidget):
             return
         tm, m = self.tm, self.m
         for i in range(8):
-            datos = [str(i), tm.ALIAS_REG.get(i, ""), tm.fmt_operando(m.reg[i])]
+            datos = [str(i), tm.ALIAS_REG.get(i, ""), tm.fmt_valor(m.reg[i])]
             for c, d in enumerate(datos):
                 it = QTableWidgetItem(d)
                 if c == 2:
@@ -2036,7 +2079,9 @@ class IDEMainWindow(QMainWindow):
         self.addToolBar(self._tb)
         
         self._tb.addSeparator()
-        self._btn_toggle_results = QAction("▶  Resultados", self)
+        self._tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self._btn_toggle_results = QAction("Resultados", self)
+        poner_icono(self._btn_toggle_results, "panel")
         self._btn_toggle_results.setCheckable(True)
         self._btn_toggle_results.setChecked(True)
         self._btn_toggle_results.triggered.connect(self._toggle_results)
@@ -2048,8 +2093,10 @@ class IDEMainWindow(QMainWindow):
                 f"border-radius:2px; padding:4px 10px;")
         self._btn_toggle_results_widget = w
 
-        def tbtn(lbl, cb, color=None):
+        def tbtn(lbl, cb, color=None, ico=None, ico_color=None):
             a = QAction(lbl, self)
+            if ico:
+                poner_icono(a, ico, color=ico_color)
             a.triggered.connect(cb)
             self._tb.addAction(a)
             w = self._tb.widgetForAction(a)
@@ -2066,7 +2113,8 @@ class IDEMainWindow(QMainWindow):
         tbtn("Semantico",       self._semantico,          C['green'])
         tbtn("Cod. Intermedio", self._codigo_intermedio,  C['orange'])
         self._tb.addSeparator()
-        self._btn_ejecutar = tbtn("▶  Ejecutar", self._ejecutar)
+        self._btn_ejecutar = tbtn("Ejecutar", self._ejecutar, ico="ejecutar",
+                                  ico_color="white")
         self._update_ejecutar_btn()
         self._tb.addSeparator()
 
@@ -2127,6 +2175,8 @@ class IDEMainWindow(QMainWindow):
         self._lbl_tema.setStyleSheet(
             f"color:{C['fg_dim']}; background:transparent;")
         self._update_ejecutar_btn()
+        refrescar_iconos()
+        self.out_lexico.refresh_theme()
         for e in self._all_editors():
             if hasattr(e, '_highlighter'):
                 e._highlighter.rehighlight()

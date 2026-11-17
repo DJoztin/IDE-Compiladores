@@ -1,0 +1,50 @@
+# CODIGO INTERMEDIO DE TRES DIRECCIONES
+# Generado desde el arbol anotado, en paralelo con el codigo TM.
+# Los temporales t1, t2... y etiquetas L1, L2... son simbolicos.
+
+read clave
+read minutos
+t1 = (float) 0
+precio = t1
+t2 = clave == 12
+if_false t2 goto L1
+t3 = (float) 2
+precio = t3
+label L1
+t4 = clave == 15
+if_false t4 goto L2
+precio = 2.2
+label L2
+t5 = clave == 18
+if_false t5 goto L3
+precio = 4.5
+label L3
+t6 = clave == 19
+if_false t6 goto L4
+precio = 3.5
+label L4
+t7 = clave == 23
+t8 = clave == 25
+t9 = t7 || t8
+if_false t9 goto L5
+t10 = (float) 6
+precio = t10
+label L5
+t11 = clave == 29
+if_false t11 goto L6
+t12 = (float) 5
+precio = t12
+label L6
+t13 = (float) 0
+t14 = precio > t13
+if_false t14 goto L7
+t15 = (float) minutos
+t16 = precio * t15
+costo = t16
+write costo
+goto L8
+label L7
+t17 = - 1
+write t17
+label L8
+halt
